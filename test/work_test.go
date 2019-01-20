@@ -1,0 +1,59 @@
+package test
+
+import (
+	"bytes"
+	"fmt"
+	"testing"
+	"text/template"
+	"workerChannel/helper"
+	"workerChannel/object"
+	"workerChannel/service"
+)
+
+func TestLine(t *testing.T) {
+	t.Run("test shell", func(t *testing.T) {
+		cmdOut := service.GetFileEndLine("/Users/Bear/gopath/src/workerChannel/test/work_test.go")
+		shellOut := helper.ExecShellPipe([]string{"wc", "/Users/Bear/gopath/src/workerChannel/test/work_test.go"}, []string{"awk", "{print $1}"})
+		if fmt.Sprintf("%d", cmdOut) != shellOut {
+			t.Fail()
+		}
+	})
+}
+
+func TestTpl(t *testing.T) {
+	type b struct {
+		Name string
+		Year int
+	}
+	boy := b{"zhenglh", 10}
+	var FuncMap = template.FuncMap{
+		"year": year,
+	}
+	//const (
+	//	master  = `Names:{{block "list" .}}{{"\n"}}{{range .}}{{println "-" .}}{{end}}{{end}}`
+	//	overlay = `{{define "list"}} {{join . ", "}}{{end}} `
+	//)
+	mul := "2"
+	tpl, _ := template.New("test").Funcs(FuncMap).Parse(`Name-{{.Name}} Year-{{block "t" .}}{{end}}`)
+	year, _ := template.Must(tpl.Clone()).Parse(`{{define "t"}}{{year .Year `+mul+`}}{{end}}`)
+	var re bytes.Buffer
+	err := year.Execute(&re, boy)
+	if err != nil {
+		t.Log(err.Error())
+	}
+	t.Log(re.String())
+}
+
+func year(year int, mul int) int {
+	return year * mul
+}
+
+func TestPad(t *testing.T) {
+	doc := object.Doc{}
+	doc.Index = object.Index{IndexName: object.IndexContent{Index: "a", Type: "b"}}
+	doc.Content = object.PhpMsg{}
+	service.BuckDoc<-doc
+	content := service.Es.ProcessBulk()
+	service.Es.SaveDocToBulk(content)
+	t.Log(<-service.BuckDoc)
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=PlaceOrder
+After=network.target
+
+[Service]
+Restart=always
+Type=simple
+ExecStart=/path/to/postlog
+
+[Install]
+WantedBy=multi-user.target
