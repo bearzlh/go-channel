@@ -3,11 +3,11 @@ package test
 import (
 	"github.com/gofrs/uuid"
 	"log"
+	"net/url"
 	"runtime"
 	"testing"
 	"time"
 	"workerChannel/helper"
-	"workerChannel/service"
 )
 
 func TestConfig(t *testing.T) {
@@ -46,6 +46,11 @@ func TestBranch(t *testing.T) {
 }
 
 func TestAn(t *testing.T) {
-	service.SetAnalysis()
-	t.Log(service.An)
+ 	url_link := `http://aa.laiak.com:80/admin%!E(MISSING)3%81`
+ 	//url_parse := url.QueryEscape(url_link)
+ 	_, err := url.Parse(url_link)
+ 	if err != nil {
+ 		t.Log(err.Error())
+ 		return
+	}
 }

@@ -13,23 +13,30 @@ const Ext = ".json"
 const Split = "/"
 
 type ConfigService struct {
-	Port         string `json:"port"`
-	ReadPath     []ReadPath `json:"read_path"`
-	LogPath      string `json:"log_path"`
-	LogLevel     string `json:"log_level"`
-	PositionFile string `json:"position_file"`
-	ImportFile   string `json:"import_file"`
-	Time         int    `json:"time"`
-	WorkerMax    int    `json:"worker_max"`
-	WorkerTotal  int    `json:"worker_total"`
-	JobForWork   int    `json:"job_for_work"`
-	AppPath      string `json:"app_path"`
-	Es           struct {
-		Host      string `json:"host"`
-		BuckSize  int    `json:"buck_size"`
-		BuckPost  bool   `json:"buck_post"`
+	ReadPath []ReadPath `json:"read_path"`
+	Log      struct {
+		Path       string `json:"path"`
+		Level      string `json:"level"`
+		FormatType string `json:"format_type"`
+		Format     string `json:"format"`
+	} `json:"log"`
+	Factory struct {
+		WorkerMax  int `json:"worker_max"`
+		WorkerInit int `json:"worker_init"`
+		JobPerWork int `json:"job_per_work"`
+	} `json:"factory"`
+	Msg struct {
+		IsBatch         bool   `json:"is_batch"`
+		BatchSize       int    `json:"batch_size"`
+		BatchTimeSecond int    `json:"batch_time_second"`
+		SendType        string `json:"send_type"`
+	} `json:"msg"`
+	PhpTimeWindow int    `json:"php_time_window"`
+	AppPath       string `json:"app_path"`
+	ServerPort    string `json:"server_port"`
+	Es            struct {
+		Host string `json:"host"`
 	} `json:"es"`
-	CollectAnalysis bool `json:"collect_analysis"`
 }
 
 type ReadPath struct {
@@ -52,7 +59,7 @@ func GetConfig(path string) *ConfigService {
 	if Cf == nil {
 		Cf = &ConfigService{}
 		Cf.AppPath = path
-		Cf.LogPath = "log"
+		Cf.Log.Path = "log"
 		Cf.loadFile()
 	}
 	<-ConfigBool
@@ -61,20 +68,20 @@ func GetConfig(path string) *ConfigService {
 
 //加载配置文件
 func (C *ConfigService) loadFile() *ConfigService {
-	Cf.LogPath = helper.GetPathJoin(Cf.AppPath, helper.GetPathWithoutSuffix(Cf.LogPath))
+	Cf.Log.Path = helper.GetPathJoin(Cf.AppPath, helper.GetPathWithoutSuffix(Cf.Log.Path))
 
 	defaultFile := Cf.AppPath + Split + ConfigName + Ext
 
 	content, err := ioutil.ReadFile(defaultFile)
 	if err != nil {
-		L.Debug("默认文件内容读取失败:"+defaultFile+":"+err.Error(), LEVEL_ERROR)
+		L.outPut("默认文件内容读取失败:" + defaultFile + ":" + err.Error())
 		ExitProgramme(os.Interrupt)
 	}
 
 	err = json.Unmarshal(content, &Cf)
 
 	if err != nil {
-		L.Debug("默认内容解析错误:"+defaultFile+":"+err.Error(), LEVEL_ERROR)
+		L.outPut("默认内容解析错误:" + defaultFile + ":" + err.Error())
 		ExitProgramme(os.Interrupt)
 	}
 
@@ -82,45 +89,45 @@ func (C *ConfigService) loadFile() *ConfigService {
 }
 
 func (C *ConfigService) ConfigWatch() {
-	watch,err := fsnotify.NewWatcher()
+	watch, err := fsnotify.NewWatcher()
 	if err != nil {
-		L.Debug(err.Error(), LEVEL_ERROR)
+		L.outPut(err.Error())
 	}
 	configFile := Cf.AppPath + Split + ConfigName + Ext
 	err = watch.Add(configFile)
-	L.Debug("watching config file:"+Cf.AppPath + Split + ConfigName + Ext, LEVEL_DEBUG)
+	L.outPut("watching config file:" + Cf.AppPath + Split + ConfigName + Ext)
 	if err != nil {
-		L.Debug(err.Error(), LEVEL_ERROR)
+		L.outPut(err.Error())
 	}
 	go func() {
 		for {
 			select {
 			case ev := <-watch.Events:
-				L.Debug(ev.Op.String(), LEVEL_DEBUG)
-				L.Debug("reload config file", LEVEL_DEBUG)
-				workCount := Cf.WorkerTotal
-				buckStatus := Cf.Es.BuckPost
+				L.outPut(ev.Op.String())
+				L.outPut("reload config file")
+				workCount := Cf.Factory.WorkerInit
+				buckStatus := Cf.Msg.IsBatch
 				C.loadFile()
 				err = watch.Add(configFile)
 				if err != nil {
-					L.Debug(err.Error(), LEVEL_ERROR)
+					L.outPut(err.Error())
 				}
-				if workCount < Cf.WorkerTotal {
-					if Cf.WorkerTotal > Cf.WorkerMax {
-						Cf.WorkerTotal = Cf.WorkerMax
+				if workCount != Cf.Factory.WorkerInit {
+					if Cf.Factory.WorkerInit > Cf.Factory.WorkerMax {
+						Cf.Factory.WorkerInit = Cf.Factory.WorkerMax
 					}
-					AddWorker(Cf.WorkerTotal - workCount)
+					SetWorker(Cf.Factory.WorkerInit)
 				}
 				//切换批量发送状态
-				if buckStatus != Cf.Es.BuckPost {
-					if Cf.Es.BuckPost {
+				if buckStatus != Cf.Msg.IsBatch {
+					if Cf.Msg.IsBatch {
 						Es.BuckWatch()
 					} else {
-						BuckClose<-true
+						BuckClose <- true
 					}
 				}
 			case err := <-watch.Errors:
-				L.Debug(err.Error(), LEVEL_ERROR)
+				L.outPut(err.Error())
 			}
 		}
 	}()

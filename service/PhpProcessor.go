@@ -19,9 +19,8 @@ var phpLineLock sync.Mutex
 var phpPostLineNumber int64
 var phpPostLineLock sync.Mutex
 
-const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST) (.*)`
-const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) ] (.*)`
-const PhpAnRegex = `^\[(\d+)\] [[:alnum:]]{13} \[ \w+ \]  \[运行时间：(\d+\.\d+)s\]\[吞吐率：.*?\] \[内存消耗：(.*?)kb\] \[文件加载：(\d+)\]`
+const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST) (.*)`
+const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
 
 func PhpProcessLine(Rp ReadPath) {
 	var currentId string
@@ -59,7 +58,7 @@ func PhpLineToJob(text string, Type string, currentId string) string {
 			item = LineItem{Type, []string{text}}
 			SetMap(id, item)
 			go func(jobId string) {
-				t := time.NewTimer(time.Second * time.Duration(Cf.Time))
+				t := time.NewTimer(time.Second * time.Duration(Cf.PhpTimeWindow))
 				select {
 				case <-t.C:
 					Lock.Lock()
@@ -92,57 +91,48 @@ func CheckValid(msg *object.PhpMsg) bool {
 	return msg.Xid != ""
 }
 
-func GetPhpMsg(lines []string, pm *object.PhpMsg, collect bool) {
-	for _, data := range lines {
-		MsgAddContent(pm, data, collect)
+func GetPhpMsg(lines []string, pm *object.PhpMsg) {
+	for index, data := range lines {
+		if index == 0 {
+			MsgAddContent(pm, data, true)
+		} else {
+			MsgAddContent(pm, data, false)
+		}
 	}
 }
 
 //初始化消息主体
-func MsgAddContent(p *object.PhpMsg, line string, collect bool) {
-	s := helper.RegexpMatch(line, PhpFirstLineRegex)
-	if collect {
-		s1 := helper.RegexpMatch(line, PhpAnRegex)
-		if len(s1) > 0 {
-			p.WorkFile, _ = strconv.Atoi(string(s1[4]))
-			memory, err := strconv.ParseFloat(strings.Replace(string(s1[3]), ",", "", 2), 32)
-			if err == nil {
-				p.WorkMemory = int(memory)
-			} else {
-				p.WorkMemory = 0
+func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
+	if firstLine {
+		s := helper.RegexpMatch(line, PhpFirstLineRegex)
+		if len(s) > 0 {
+			p.LogLine, _ = strconv.ParseInt(string(s[1]), 10, 64)
+			p.Xid = string(s[2])
+			p.Date = helper.FormatTimeStamp(string(s[3]), "")
+			p.Remote = string(s[4])
+			p.Method = string(s[5])
+			p.Url = strings.TrimSpace(string(s[6]))
+			p.Timestamp = fmt.Sprintf("%d", time.Now().Unix())
+			u, err := url.Parse(p.Url)
+			if err != nil {
+				L.Debug("url parse error"+err.Error()+",url:"+p.Url, LEVEL_ERROR)
+			}else{
+				if len(u.Query()) > 0 {
+					QueryProcess(u.Query(), p)
+				}
+				p.Uri = u.Path
+				p.DomainPort = u.Host
 			}
-			timeS, err := strconv.ParseFloat(string(s1[2]), 32)
-			if err == nil {
-				timeMs := timeS * 1000
-				p.WorkTime = int(timeMs)
-			} else {
-				p.WorkTime = 0
+			WechatMatch := helper.RegexpMatch(p.DomainPort, `^(wx\w+)\.`)
+			if len(WechatMatch) > 0 {
+				p.WechatAppId = string(WechatMatch[1])
 			}
-		}
-	}
-	if len(s) > 0 {
-		p.LogLine, _ = strconv.ParseInt(string(s[1]), 10, 64)
-		p.Xid = string(s[2])
-		p.Date = helper.FormatTimeStamp(string(s[3]), "")
-		p.Remote = string(s[4])
-		p.Method = string(s[5])
-		p.Url = strings.TrimSpace(string(s[6]))
-		p.Timestamp = fmt.Sprintf("%d", time.Now().Unix())
-		u, _ := url.Parse(p.Url)
-		if len(u.Query()) > 0 {
-			QueryProcess(u.Query(), p)
-		}
-		p.Uri = u.Path
-		p.DomainPort = u.Host
-		WechatMatch := helper.RegexpMatch(p.DomainPort, `^(wx\w+)\.`)
-		if len(WechatMatch) > 0 {
-			p.WechatAppId = string(WechatMatch[1])
-		}
 
-		p.HostName, _ = os.Hostname()
-		p.AppId = GetAppIdFromHostName(p.HostName)
-		p.Tag = "php." + p.AppId + ".info"
-		p.LogType = "info"
+			p.HostName, _ = os.Hostname()
+			p.AppId = GetAppIdFromHostName(p.HostName)
+			p.Tag = "php." + p.AppId + ".info"
+			p.LogType = "info"
+		}
 	} else {
 		MatchMessage := helper.RegexpMatch(line, PhpMsgRegex)
 		if len(MatchMessage) > 0 {
@@ -158,7 +148,8 @@ func MsgAddContent(p *object.PhpMsg, line string, collect bool) {
 			p.Message = append(p.Message, Message)
 		} else {
 			if len(p.Message) > 0 {
-				p.Message[len(p.Message)-1].Content += strings.TrimSpace(line)
+				Match := helper.RegexpMatch(line, `^\[\d+\] (.*)`)
+				p.Message[len(p.Message)-1].Content += strings.TrimSpace(string(Match[1]))
 			}
 		}
 	}
@@ -198,7 +189,7 @@ func GetAppIdFromHostName(HostName string) string {
 }
 
 func GetPositionFile(logType string) string {
-	return helper.GetPathJoin(Cf.AppPath, Cf.PositionFile + "_" + logType)
+	return helper.GetPathJoin(Cf.AppPath, ".position_" + logType)
 }
 
 func SetPhpLineNumber(line int64) int64 {

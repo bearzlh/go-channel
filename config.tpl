@@ -1,7 +1,7 @@
 {
   "read_path": [
     {
-      "dir": "/data/www/cps/runtime/log/",
+      "dir": "php_log_dir",
       "time_format": "Ym/d_H",
       "suffix": ".log",
       "type": "php",
@@ -9,7 +9,7 @@
       "continue": true
     },
     {
-      "dir": "/usr/local/openresty/nginx/logs/",
+      "dir": "{nginx_log_dir}",
       "time_format": "",
       "suffix": "access.log",
       "type": "nginx",
@@ -18,7 +18,7 @@
     }
   ],
   "log": {
-    "path": "log",
+    "path": "/var/log/postlog/",
     "level": "debug",
     "format_type": "time",
     "format": "Ym/d_H"
@@ -29,13 +29,13 @@
   },
   "msg": {
     "is_batch": true,
-    "batch_size": 50,
-    "batch_time_second": 1,
+    "batch_size": 90,
+    "batch_time_second": 3,
     "send_type": "es"
   },
   "server_port": "8081",
   "php_time_window": 2,
   "es": {
-    "host": "192.168.0.109:9200"
+    "host": "es_host_port"
   }
 }

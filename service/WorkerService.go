@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/gofrs/uuid"
 	"github.com/hpcloud/tail"
 	"io"
 	"io/ioutil"
@@ -21,38 +22,36 @@ type Analysis struct {
 	LineCount int64 `json:"line_count"`
 
 	//请求统计
-	JobCount int64 `json:"job_count"`
-	JobQueue int `json:"job_queue"`
+	JobCount      int64 `json:"job_count"`
+	JobQueue      int   `json:"job_queue"`
 	JobProcessing int64 `json:"job_processing"`
-	JobSuccess int64 `json:"job_success"`
+	JobSuccess    int64 `json:"job_success"`
 	JobErrorCount int64 `json:"job_error"`
 
 	//运行时间
-	TimeStart int64 `json:"time_start"`
+	TimeStart    int64  `json:"time_start"`
 	TimeStartStr string `json:"time_start_str"`
-	TimeEnd int64 `json:"time_end"`
-	TimeEndStr string `json:"time_end_str"`
-	TimeWork string `json:"time_work"`
+	TimeEnd      int64  `json:"time_end"`
+	TimeEndStr   string `json:"time_end_str"`
+	TimeWork     string `json:"time_work"`
 
 	HeapMemoryUsed uint64 `json:"memory_used_M"`
-	SysMemoryUsed uint64 `json:"sys_memory_used_M"`
+	SysMemoryUsed  uint64 `json:"sys_memory_used_M"`
+
+	BatchLength int `json:"batch_length"`
 
 	//workJobs
-	WorkerMap map[int]int `json:"worker_map"`
-
-	//今日索引
-	DayIndex int8 `json:"day_index"`
+	WorkerMap []*Worker `json:"worker_map"`
 }
 
-type WorkerService struct {
-	ID      int
-	RepJobs chan string
-	quit    chan bool
+type Worker struct {
+	ID        string    `json:"id"`
+	IsWorking bool      `json:"is_working"`
+	IsQuit    bool `json:"is_quit"`
 }
 
 type workerPool struct {
-	WorkerChan chan *WorkerService
-	WorkerList []*WorkerService
+	WorkerList []*Worker
 }
 
 type LineItem struct{
@@ -71,16 +70,16 @@ var MapLock *sync.Mutex
 var StopSignal = make(chan os.Signal)
 
 //业务处理
-func (w *WorkerService) handleJob(jobId string) {
+func (w *Worker) handleJob(jobId string) {
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	var JobError int64 = 0
 	if item, ok := GetMap(jobId);ok {
 		if item.Type == "php" {
 			Msg := object.PhpMsg{}
-			GetPhpMsg(item.List, &Msg, Cf.CollectAnalysis)
+			GetPhpMsg(item.List, &Msg)
 			if CheckValid(&Msg) {
 				//批量发送
-				if Cf.Es.BuckPost {
+				if Cf.Msg.IsBatch {
 					Es.BuckAdd(Msg)
 				} else {
 					Es.PostAdd(Msg)
@@ -93,7 +92,7 @@ func (w *WorkerService) handleJob(jobId string) {
 			Msg := object.NginxMsg{}
 			GetNginxMsg(item.List, &Msg)
 			//批量发送
-			if Cf.Es.BuckPost {
+			if Cf.Msg.IsBatch {
 				Es.BuckAdd(Msg)
 			} else {
 				Es.PostAdd(Msg)
@@ -111,79 +110,73 @@ func (w *WorkerService) handleJob(jobId string) {
 	}
 }
 
-func (w *WorkerService) getTitle() string {
-	host, _ := os.Hostname()
-	return host + "\n" + GetIp().InternalIp
-}
-
-
 //初始化任务队列
-func (w *WorkerService) Start() {
-	w.RepJobs = make(chan string, Cf.JobForWork)
+func (w *Worker) Start() {
 	go func() {
-		L.Debug(fmt.Sprintf("worker %d waiting", w.ID), LEVEL_DEBUG)
+		L.Debug(fmt.Sprintf("worker %s waiting", w.ID), LEVEL_DEBUG)
 		for {
 			select {
-			case jobID := <-w.RepJobs:
-				L.Debug(fmt.Sprintf("worker: %d, will handle job: %s", w.ID, jobID), LEVEL_DEBUG)
+			case jobID := <-JobQueue:
+				L.Debug(fmt.Sprintf("worker: %s, will handle job: %s", w.ID, jobID), LEVEL_DEBUG)
+				w.IsWorking = true
 				w.handleJob(jobID)
-			case q := <-w.quit:
-				if q {
-					L.Debug(fmt.Sprintf("worker: %s, will stop.", w.ID), LEVEL_DEBUG)
-					return
+				w.IsWorking = false
+				if w.IsQuit {
+					L.Debug(fmt.Sprintf("worker: %s, will quit", w.ID), LEVEL_DEBUG)
+					break
 				}
 			}
 		}
 	}()
 }
 
-func NewWorker(i int) *WorkerService {
-	return &WorkerService{i, nil, nil}
+func NewWorker() {
+	id, _ := uuid.NewV4()
+	worker := &Worker{ID: id.String(), IsWorking: false}
+	worker.Start()
+	WorkPool.WorkerList = append(WorkPool.WorkerList, worker)
+	L.Debug(fmt.Sprintf("worker %s started", worker.ID), LEVEL_DEBUG)
 }
 
 //初始化工厂
-func InitWorkPool() error {
+func InitWorkPool() {
 	if An.TimeStart == 0 {
 		An.TimeStart = time.Now().Unix()
 	}
 	Lock = new(sync.Mutex)
 	MapLock = new(sync.Mutex)
-	n := Cf.WorkerTotal
-	AddWorker(n)
-	return nil
+	LineMap = make(map[string]LineItem)
+	Tail = make(map[string]*tail.Tail)
+	SetWorker(Cf.Factory.WorkerInit)
 }
 
 //添加工人
-func AddWorker(n int) {
+func SetWorker(n int) {
 	if WorkPool == nil {
 		WorkPool = &workerPool{
-			WorkerChan: make(chan *WorkerService, Cf.WorkerMax),
-			WorkerList: make([]*WorkerService, 0, Cf.WorkerMax),
+			WorkerList: make([]*Worker, 0, Cf.Factory.WorkerInit),
 		}
 	}
 	workLen := len(WorkPool.WorkerList)
-	for i := workLen; i < n + workLen; i++ {
-		worker := NewWorker(i)
-		WorkPool.WorkerList = append(WorkPool.WorkerList, worker)
-		worker.Start()
-		WorkPool.WorkerChan<-worker
-		L.Debug(fmt.Sprintf("worker %d started", worker.ID), LEVEL_DEBUG)
-	}
-}
-
-//工人等待工作
-func Dispatch() {
-	for {
-		select {
-		case job := <-JobQueue:
-			go func(jobID string) {
-				L.Debug(fmt.Sprintf("Job created: %s", jobID), LEVEL_DEBUG)
-				worker := <-WorkPool.WorkerChan
-				worker.RepJobs <- jobID
-				WorkPool.WorkerChan <- worker
-			}(job)
+	if n > workLen {
+		for i := 0; i < n-workLen; i++ {
+			NewWorker()
 		}
 	}
+	if n < workLen {
+		Tmp := WorkPool.WorkerList
+		WorkPool = &workerPool{
+			WorkerList: make([]*Worker, 0, Cf.Factory.WorkerInit),
+		}
+		for index, item := range Tmp {
+			if index < workLen-n {
+				item.IsQuit = true
+			} else {
+				WorkPool.WorkerList = append(WorkPool.WorkerList, item)
+			}
+		}
+	}
+
 }
 
 //执行下一个文件
@@ -289,10 +282,6 @@ func DelMap(id string) {
 	}
 }
 
-func GetDayIndex() int8 {
-	return int8(time.Now().Unix() / 3600 / 24 % 2)
-}
-
 //转化为json格式
 func MsgToJson(msg object.MsgInterface) string {
 	jsonContent, _ := json.Marshal(msg)
@@ -351,13 +340,8 @@ func GetFileEndLine(filePath string) int64 {
 
 //获取统计信息
 func GetAnalysis() []byte {
-	if An.WorkerMap == nil {
-		An.WorkerMap = make(map[int]int)
-	}
 	if WorkPool != nil {
-		for _, work := range WorkPool.WorkerList {
-			An.WorkerMap[work.ID] = len(work.RepJobs)
-		}
+		An.WorkerMap = WorkPool.WorkerList
 	}
 
 	An.JobQueue = len(JobQueue)
@@ -368,9 +352,12 @@ func GetAnalysis() []byte {
 	runtime.ReadMemStats(memStat)
 	An.HeapMemoryUsed = memStat.Alloc / 1024 / 1024
 	An.SysMemoryUsed = memStat.Sys / 1024 / 1024
+	An.BatchLength = len(BuckDoc)
 
-	An.DayIndex = GetDayIndex()
-	jsonData, _ := json.Marshal(An)
+	jsonData, err := json.Marshal(An)
+	if err != nil {
+		L.Debug(err.Error(), LEVEL_ERROR)
+	}
 	return jsonData
 }
 

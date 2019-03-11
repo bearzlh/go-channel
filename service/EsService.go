@@ -49,7 +49,7 @@ func (E *EsService) BuckWatch() {
 	go func() {
 		for {
 			select {
-			case <-time.NewTimer(time.Second * 5).C:
+			case <-time.NewTimer(time.Second * time.Duration(Cf.Msg.BatchTimeSecond)).C:
 				if len(EsCanUse) == 0 {
 					if len(BuckDoc) > 0 {
 						L.Debug("timeout to post", LEVEL_DEBUG)
@@ -88,7 +88,7 @@ func (E *EsService) BuckWatch() {
 //添加数据
 func (E *EsService) BuckAdd(msg object.MsgInterface) {
 	BuckDoc <- object.Doc{Index: msg.GetIndexObj(msg.GetTimestamp()), Content: msg}
-	if len(BuckDoc) > Cf.Es.BuckSize {
+	if len(BuckDoc) > Cf.Msg.BatchSize {
 		BuckFull <- true
 	}
 }
@@ -96,8 +96,8 @@ func (E *EsService) BuckAdd(msg object.MsgInterface) {
 //组装批量数据
 func (E *EsService) ProcessBulk() []string {
 	bulkContent := make([]string, 0)
-	lenBulk := Cf.Es.BuckSize
-	if len(BuckDoc) < Cf.Es.BuckSize {
+	lenBulk := Cf.Msg.BatchSize
+	if len(BuckDoc) < Cf.Msg.BatchSize {
 		lenBulk = len(BuckDoc)
 	}
 	for i := 0; i < lenBulk; i++ {
@@ -238,11 +238,11 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 		return conn, err
 	}
 
-	tcp_conn := conn.(*net.TCPConn)
-	err1 := tcp_conn.SetKeepAlive(false)
+	tcpConn := conn.(*net.TCPConn)
+	err1 := tcpConn.SetKeepAlive(false)
 	if err1 != nil {
 		L.Debug("设置SetKeepAlive失败"+err1.Error(), LEVEL_ERROR)
 	}
 
-	return tcp_conn, err1
+	return tcpConn, err1
 }

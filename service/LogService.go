@@ -5,7 +5,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 	"workerChannel/helper"
@@ -45,6 +47,7 @@ func GetLog() *LogService {
 			LEVEL_ALERT:    5,
 			LEVEL_CRITICAL: 6,
 		}
+		L.setLogDir()
 	}
 	<- chLog
 
@@ -61,32 +64,44 @@ func (Log *LogService)DebugOnError(err error) {
 //打日志
 func (Log *LogService) Debug(msg string, level string) {
 	logLevel := int8(0)
-	if _, ok := LogLevel[Cf.LogLevel]; ok {
-		logLevel = LogLevel[Cf.LogLevel]
+	if _, ok := LogLevel[Cf.Log.Level]; ok {
+		logLevel = LogLevel[Cf.Log.Level]
 	}
 
 	currentLevel := LogLevel[level]
 
 	if currentLevel >= logLevel {
-		dir := Cf.LogPath + helper.TimeFormat("/Ym", 0)
-
-		//检查目录
-		fileInfo, _ := os.Stat(dir)
-		if fileInfo == nil || !fileInfo.IsDir() {
-			err := os.Mkdir(dir, 0755)
-			if err != nil {
-				L.outPut(fmt.Sprintf("%s\n", err))
-				return
-			}
+		logFile := L.getLogPath(level)
+		err := helper.Mkdir(path.Dir(logFile))
+		if err != nil {
+			L.outPut(fmt.Sprintf("%s\n", err))
+			ExitProgramme(os.Interrupt)
 		}
-
-		logFile := dir + helper.TimeFormat("/d_H", 0) + ".log"
 		content := L.getMsg(msg, level)
 		L.WriteLog(logFile, content)
 		if currentLevel >= 4 {
 			errorContent := string(debug.Stack())
 			L.WriteLog(logFile, errorContent)
 		}
+	}
+}
+
+func (Log *LogService) getLogPath(level string) string {
+	format := make([]string, 0)
+	if strings.Contains(Cf.Log.FormatType, "time") {
+		format = append(format, helper.TimeFormat(Cf.Log.Format, 0))
+	}
+
+	if strings.Contains(Cf.Log.FormatType, "level") {
+		format = append(format, level)
+	}
+
+	return helper.GetPathJoin(Cf.Log.Path, strings.Join(format, ".")+".log")
+}
+
+func (Log *LogService)setLogDir() {
+	if !strings.HasPrefix(Cf.Log.Path, "/") {
+		Cf.Log.Path = helper.GetPathJoin(Cf.AppPath, Cf.Log.Path)
 	}
 }
 
@@ -116,6 +131,25 @@ func (Log *LogService) WriteLog(fileName string, content string) {
 func (Log *LogService) WriteOverride(fileName string, content string) {
 	LockPosition.Lock()
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	defer func() {
+		if err := file.Close(); err != nil {
+			L.Debug("close file error"+err.Error(), LEVEL_ERROR)
+		}
+		LockPosition.Unlock()
+	}()
+	if err != nil {
+		L.outPut(fmt.Sprintf("%s\n", err))
+		return
+	}
+	_, err1 := io.WriteString(file, content)
+	if err != nil {
+		L.outPut(fmt.Sprintf("%s\n", err1))
+	}
+}
+
+func (Log *LogService) WriteAppend(fileName string, content string) {
+	LockPosition.Lock()
+	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	defer func() {
 		if err := file.Close(); err != nil {
 			L.Debug("close file error"+err.Error(), LEVEL_ERROR)

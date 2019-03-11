@@ -18,9 +18,6 @@ type PhpMsg struct {
 	Tag         string `json:"tag"`
 	LogType     string `json:"log_type"`
 	Timestamp   string `json:"timestamp"`
-	WorkTime    int    `json:"work_time_ms"`
-	WorkMemory  int    `json:"work_memory_kb"`
-	WorkFile    int    `json:"work_file"`
 
 	LogLine     int64 `json:"log_line"`
 
