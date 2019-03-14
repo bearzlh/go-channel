@@ -34,10 +34,12 @@ func printMemStats() {
 }
 
 func TestTime(t *testing.T) {
-	t1 := time.Date(2018, 2, 1, 1, 0, 2, 0, time.Local);
-	t2 := time.Date(2018, 2, 2, 0, 1, 1, 0, time.Local);
-	t3 := time.Duration(t2.UnixNano() - t1.UnixNano())
-	t.Log(t3.String())
+	//t1 := time.Date(2018, 2, 1, 1, 0, 2, 0, time.Local);
+	//t2 := time.Date(2018, 2, 2, 0, 1, 1, 0, time.Local);
+	//t3 := time.Duration(t2.UnixNano() - t1.UnixNano())
+	//t.Log(t3.String())
+
+	t.Log(time.Now().Sub(time.Now()))
 }
 
 func TestBranch(t *testing.T) {

@@ -10,12 +10,12 @@ func GetPosition(file string) object.Position {
 	content, err := ioutil.ReadFile(file)
 	P := object.Position{}
 	if err != nil {
-		L.Debug("open position file err "+err.Error(), LEVEL_ERROR)
+		L.Debug("open position file err "+err.Error(), LEVEL_DEBUG)
 		return P
 	}
 	errUnmarshal := json.Unmarshal(content, &P)
 	if errUnmarshal != nil {
-		L.Debug("position file unmarshal err "+errUnmarshal.Error(), LEVEL_ERROR)
+		L.Debug("position file unmarshal err "+errUnmarshal.Error(), LEVEL_DEBUG)
 	}
 	return P
 }

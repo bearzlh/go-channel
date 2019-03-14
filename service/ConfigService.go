@@ -31,12 +31,17 @@ type ConfigService struct {
 		BatchTimeSecond int    `json:"batch_time_second"`
 		SendType        string `json:"send_type"`
 	} `json:"msg"`
-	PhpTimeWindow int    `json:"php_time_window"`
+	PhpTimeWindow int64    `json:"php_time_window"`
 	AppPath       string `json:"app_path"`
 	ServerPort    string `json:"server_port"`
 	Es            struct {
 		Host string `json:"host"`
 	} `json:"es"`
+	Monitor struct {
+		Cpu       float64 `json:"cpu"`
+		Load      float64 `json:"load"`
+		SleepNs int `json:"sleep_ns"`
+	} `json:"monitor"`
 }
 
 type ReadPath struct {

@@ -24,9 +24,11 @@ var EsCanUse = make(chan bool, 1)
 
 func (E *EsService) CheckEsCanAccess() {
 	go func() {
+		t := time.NewTimer(time.Second * 1)
 		for {
 			select {
-			case <-time.NewTimer(time.Second * 1).C:
+			case <-t.C:
+				t.Reset(time.Second * 1)
 				_, err := E.GetData("http://" + Cf.Es.Host)
 				if err == nil {
 					if len(EsCanUse) == 1 {
@@ -39,7 +41,6 @@ func (E *EsService) CheckEsCanAccess() {
 						EsCanUse <- true
 					}
 				}
-
 			}
 		}
 	}()
@@ -47,9 +48,11 @@ func (E *EsService) CheckEsCanAccess() {
 
 func (E *EsService) BuckWatch() {
 	go func() {
+		t := time.NewTimer(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 		for {
 			select {
-			case <-time.NewTimer(time.Second * time.Duration(Cf.Msg.BatchTimeSecond)).C:
+			case <-t.C:
+				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(EsCanUse) == 0 {
 					if len(BuckDoc) > 0 {
 						L.Debug("timeout to post", LEVEL_DEBUG)
@@ -110,6 +113,7 @@ func (E *EsService) ProcessBulk() []string {
 		indexContent, _ := json.Marshal(doc.Index)
 		Content, _ := json.Marshal(doc.Content)
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
+		An.TimePostEnd = doc.Content.GetTimestamp()
 	}
 	return bulkContent
 }

@@ -19,13 +19,16 @@ var phpLineLock sync.Mutex
 var phpPostLineNumber int64
 var phpPostLineLock sync.Mutex
 
-const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST) (.*)`
+const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
 
 func PhpProcessLine(Rp ReadPath) {
 	var currentId string
 	tail := Tail[Rp.Type]
 	for line := range tail.Lines {
+		if HostHealth {
+			time.Sleep(getRateLimit())
+		}
 		phpLine := IncreasePhpLineNumber()
 		Lock.Lock()
 		An.TimeEnd = time.Now().Unix()
@@ -38,7 +41,11 @@ func PhpProcessLine(Rp ReadPath) {
 	}
 }
 
-func PhpLineToJob(text string, Type string, currentId string) string {
+func getRateLimit() time.Duration {
+	return time.Duration(Cf.Monitor.SleepNs)
+}
+
+func PhpLineToJob(text string, Type string, preId string) string {
 	check := helper.RegexpMatch(text, `^\[\d+\] ([[:alnum:]]{13}) `)
 	id := ""
 
@@ -47,44 +54,39 @@ func PhpLineToJob(text string, Type string, currentId string) string {
 		id = string(check[1])
 	}
 
-	//如果不满足行规则则匹配到上一个行任务
-	if currentId != "" && len(check) == 0 {
-		id = currentId
-	}
-
 	//任务处理，并计时，规定时间后处理任务
-	if item, ok := GetMap(id); !ok && id != "" && len(check) != 0 {
-		if len(helper.RegexpMatch(text, PhpFirstLineRegex)) > 0 {
-			item = LineItem{Type, []string{text}}
-			SetMap(id, item)
-			go func(jobId string) {
-				t := time.NewTimer(time.Second * time.Duration(Cf.PhpTimeWindow))
-				select {
-				case <-t.C:
-					Lock.Lock()
-					An.JobCount++
-					An.JobProcessing++
-					Lock.Unlock()
-					JobQueue <- jobId
-				}
-			}(id)
-		} else {
-			//重启时移动到上次请求的开始位置，不包含首行
-			//L.Debug("not find first line->"+id, LEVEL_DEBUG)
-		}
-	}else{
+	if item, ok := GetMap(id); !ok && id != "" {
+		item = LineItem{Type, []string{text}}
+		SetMap(id, item)
+		go func(jobId string) {
+			select {
+			case <-time.After(time.Second * time.Duration(Cf.PhpTimeWindow)):
+				Lock.Lock()
+				An.JobCount++
+				An.JobProcessing++
+				Lock.Unlock()
+				JobQueue <- jobId
+			}
+		}(id)
+	} else {
 		item, ok := GetMap(id)
 		if ok {
 			item.List = append(item.List, text)
 			SetMap(id, item)
 		} else {
-			//首行为非请求第一行
-			//L.Debug("not find request head->"+id, LEVEL_DEBUG)
+			if item, ok := GetMap(preId); ok {
+				item.List = append(item.List, text)
+				SetMap(preId, item)
+			}
 		}
 	}
 
 	//记录当前id
-	return id
+	if id == "" {
+		return preId
+	} else {
+		return id
+	}
 }
 
 func CheckValid(msg *object.PhpMsg) bool {

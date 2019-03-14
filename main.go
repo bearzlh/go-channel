@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	//_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,31 +16,31 @@ import (
 func main() {
 	SignalHandler()
 
-	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
-	service.GetConfig(dir)
-	service.GetLog()
-	service.SetAnalysis()
-	service.Es.CheckEsCanAccess()
-	service.InitWorkPool()
-
-	//启动web服务
-	go func() {
-		http.HandleFunc("/", Status)
-		service.L.Debug("status page,listen "+service.Cf.ServerPort, service.LEVEL_DEBUG)
-		err := http.ListenAndServe(":"+service.Cf.ServerPort, nil)
-		if err != nil {
-			service.L.Debug(err.Error(), service.LEVEL_ERROR)
-		}
-	}()
-
-	//配置文件监控
-	service.Cf.ConfigWatch()
-
-	//批量发送
-	if service.Cf.Msg.IsBatch {
-		service.Es.BuckWatch()
+	//获取当前路径
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		fmt.Println("error to get path" + err.Error())
 	}
 
+	//配置文件加载
+	service.GetConfig(dir)
+
+	//服务初始化
+	ServiceInit()
+
+	//启动web服务
+	if service.Cf.ServerPort != "" {
+		go func() {
+			http.HandleFunc("/", Status)
+			service.L.Debug("status page,listen "+service.Cf.ServerPort, service.LEVEL_DEBUG)
+			err := http.ListenAndServe(":"+service.Cf.ServerPort, nil)
+			if err != nil {
+				service.L.Debug(err.Error(), service.LEVEL_ERROR)
+			}
+		}()
+	}
+
+	//开始监控日志变化
 	for i := 0; i < len(service.Cf.ReadPath); i++ {
 
 		item := service.Cf.ReadPath[i]
@@ -58,10 +59,14 @@ func main() {
 
 			if item.TimeFormat != "" {
 				//定时检查是不是需要切换文件
-				go func() {
+				go func(i int) {
+					t := time.NewTimer(time.Second * 3)
 					for {
+						//以防配置文件修改后不生效
+						item = service.Cf.ReadPath[i]
 						select {
-						case <-time.NewTimer(time.Second * 3).C:
+						case <-t.C:
+							t.Reset(time.Second * 3)
 							if service.Tail[item.Type] != nil && service.Tail[item.Type].Filename != "" {
 								nextFile := service.GetNextFile(item, service.Tail[item.Type].Filename)
 								if nextFile != "" {
@@ -72,17 +77,43 @@ func main() {
 							}
 						}
 					}
-				}()
+				}(i)
 			}
 		}
 	}
-
+	//errServe := http.ListenAndServe("127.0.0.1:6060", nil)
+	//if errServe != nil {
+	//	service.L.Debug("ListenAndServe error"+errServe.Error(), service.LEVEL_ERROR)
+	//}
 	select {}
+}
+
+//服务初始化
+func ServiceInit() {
+	//初始化日志
+	service.GetLog()
+
+	//初始化统计信息
+	service.SetAnalysis()
+
+	//检测es是否可用
+	service.Es.CheckEsCanAccess()
+
+	//工作初始化
+	service.InitWorkPool()
+
+	//配置文件监控
+	service.Cf.ConfigWatch()
+
+	//检测批量发送队列
+	if service.Cf.Msg.IsBatch {
+		service.Es.BuckWatch()
+	}
 }
 
 //状态页打印
 func Status(w http.ResponseWriter, req *http.Request) {
-	_, err := w.Write(service.GetAnalysis())
+	_, err := w.Write(service.GetAnalysis(true))
 	if err != nil {
 		service.L.Debug(err.Error(), service.LEVEL_ERROR)
 	}
@@ -97,7 +128,7 @@ func SignalHandler() {
 		//保存当前进度
 		service.L.Debug(msg.String(), service.LEVEL_DEBUG)
 		service.SetRunTimePosition()
-		service.L.WriteOverride(helper.GetPathJoin(service.Cf.AppPath, ".analysis"), string(service.GetAnalysis()))
+		service.L.WriteOverride(helper.GetPathJoin(service.Cf.AppPath, ".analysis"), string(service.GetAnalysis(false)))
 		os.Exit(0)
 	}()
 }

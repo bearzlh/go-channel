@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 	"text/template"
+	"time"
 	"workerChannel/helper"
 	"workerChannel/object"
 	"workerChannel/service"
@@ -56,4 +57,23 @@ func TestPad(t *testing.T) {
 	content := service.Es.ProcessBulk()
 	service.Es.SaveDocToBulk(content)
 	t.Log(<-service.BuckDoc)
+}
+
+func TestRun(t *testing.T) {
+	jobMap := make(map[int64][]string)
+	jobMap[1] = []string{"a","b","c"}
+	jobMap[4] = []string{"a","b","c"}
+	jobMap[3] = []string{"a","b","c"}
+	jobMap[5] = []string{"a","b","c"}
+	var keys []int64
+	for k := range jobMap {
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
+		if time.Now().Unix() - k > 1 {
+			for _, job := range jobMap[k] {
+				service.JobQueue<-job
+			}
+		}
+	}
 }

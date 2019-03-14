@@ -2,5 +2,6 @@
 log/*
 .position*
 postlog*
+package
 .analysis
 *.sh

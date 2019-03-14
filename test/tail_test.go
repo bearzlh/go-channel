@@ -4,13 +4,18 @@ import (
 	"fmt"
 	"github.com/hpcloud/tail"
 	"testing"
+	"time"
 )
 
 func TestTail(t *testing.T) {
-	filePath := "/Users/Bear/gopath/src/workerChannel/test/config_test.go"
+	hourLine := 200000 * 75
+	rate := 3600000000 / hourLine / 4
+	filePath := "/var/log/cpslog/201903/21_10.log"
 	tailFile, _ := tail.TailFile(filePath, tail.Config{Follow: false})
-	for lines := range tailFile.Lines {
-		pos ,_ := tailFile.Tell()
-		t.Log(lines.Text+fmt.Sprintf("%d", pos))
+	now := time.Now()
+	for range tailFile.Lines {
+		time.Sleep(time.Duration(rate) * time.Microsecond)
+		//fmt.Println(line.Text)
 	}
+	fmt.Println(time.Now().Sub(now))
 }

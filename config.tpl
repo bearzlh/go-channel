@@ -19,19 +19,24 @@
   ],
   "log": {
     "path": "/var/log/postlog/",
-    "level": "debug",
+    "level": "error",
     "format_type": "time",
     "format": "Ym/d_H"
   },
   "factory": {
-    "worker_max": 10000,
-    "worker_init": 2
+    "worker_max": 10,
+    "worker_init": 4
   },
   "msg": {
     "is_batch": true,
     "batch_size": 90,
     "batch_time_second": 3,
     "send_type": "es"
+  },
+  "monitor": {
+    "cpu": 100,
+    "load": 6,
+    "sleep_ns": 1000
   },
   "server_port": "8081",
   "php_time_window": 2,

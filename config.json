@@ -1,7 +1,7 @@
 {
   "read_path": [
     {
-      "dir": "/data/www/cps/runtime/log/",
+      "dir": "/var/log/cpslog/",
       "time_format": "Ym/d_H",
       "suffix": ".log",
       "type": "php",
@@ -25,13 +25,18 @@
   },
   "factory": {
     "worker_max": 10000,
-    "worker_init": 2
+    "worker_init": 4
   },
   "msg": {
     "is_batch": true,
     "batch_size": 50,
     "batch_time_second": 1,
     "send_type": "es"
+  },
+  "monitor": {
+    "cpu": 550,
+    "load": 5.5,
+    "sleep_ns": 1000
   },
   "server_port": "8081",
   "php_time_window": 2,

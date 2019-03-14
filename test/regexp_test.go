@@ -38,3 +38,11 @@ func TestJson(t *testing.T) {
 	service.ProcessNginxMsg(&NginxMsg, nginxStr)
 	t.Log(NginxMsg)
 }
+
+func TestPhp(t *testing.T) {
+	msg := `[1] 5c88bcfe25c75 [ info ] [ BEHAVIOR ] Run app\admin\behavior\AdminLog @app_end [ RunTime:0.020256s ]`
+	mlist := helper.RegexpMatch(msg, service.PhpMsgRegex)
+	for _, item := range mlist {
+		t.Log(string(item))
+	}
+}

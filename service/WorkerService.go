@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -34,14 +35,21 @@ type Analysis struct {
 	TimeEnd      int64  `json:"time_end"`
 	TimeEndStr   string `json:"time_end_str"`
 	TimeWork     string `json:"time_work"`
+	TimeDelay    string `json:"time_delay"`
+	TimePostEnd  int64  `json:"time_post_end"`
 
-	HeapMemoryUsed uint64 `json:"memory_used_M"`
-	SysMemoryUsed  uint64 `json:"sys_memory_used_M"`
+	HeapMemoryUsed uint64  `json:"memory_used_M"`
+	SysMemoryUsed  uint64  `json:"sys_memory_used_M"`
+	CpuRate        float64 `json:"cpu_rate"`
+	Load           float64 `json:"load"`
 
 	BatchLength int `json:"batch_length"`
 
 	//workJobs
-	WorkerMap []*Worker `json:"worker_map"`
+	WorkerMap  []*Worker `json:"worker_map"`
+	HostHealth bool      `json:"host_health"`
+
+	Cf *ConfigService `json:"cf"`
 }
 
 type Worker struct {
@@ -69,7 +77,23 @@ var Lock *sync.Mutex
 var MapLock *sync.Mutex
 var StopSignal = make(chan os.Signal)
 
-//业务处理
+var HostHealth bool
+
+func CheckHostHealth() {
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second * 3):
+				HostHealth = GetCpu() > Cf.Monitor.Cpu || GetLoad() > Cf.Monitor.Load
+				if HostHealth {
+					time.Sleep(time.Minute)
+				}
+			}
+		}
+	}()
+}
+
+//业务处理50%
 func (w *Worker) handleJob(jobId string) {
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	var JobError int64 = 0
@@ -143,6 +167,7 @@ func InitWorkPool() {
 	if An.TimeStart == 0 {
 		An.TimeStart = time.Now().Unix()
 	}
+	CheckHostHealth()
 	Lock = new(sync.Mutex)
 	MapLock = new(sync.Mutex)
 	LineMap = make(map[string]LineItem)
@@ -339,7 +364,7 @@ func GetFileEndLine(filePath string) int64 {
 }
 
 //获取统计信息
-func GetAnalysis() []byte {
+func GetAnalysis(host bool) []byte {
 	if WorkPool != nil {
 		An.WorkerMap = WorkPool.WorkerList
 	}
@@ -347,18 +372,47 @@ func GetAnalysis() []byte {
 	An.JobQueue = len(JobQueue)
 	An.TimeStartStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeStart)
 	An.TimeEndStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeEnd)
-	An.TimeWork = helper.FormatTime(An.TimeEnd - An.TimeStart)
+	if An.TimeEnd > 0 {
+		An.TimeWork = helper.FormatTime(An.TimeEnd - An.TimeStart)
+	} else {
+		An.TimeWork = "0"
+	}
 	memStat := new(runtime.MemStats)
 	runtime.ReadMemStats(memStat)
 	An.HeapMemoryUsed = memStat.Alloc / 1024 / 1024
 	An.SysMemoryUsed = memStat.Sys / 1024 / 1024
 	An.BatchLength = len(BuckDoc)
 
+	if host {
+		An.CpuRate = GetCpu()
+		An.Load = GetLoad()
+	}
+
+	An.HostHealth = HostHealth
+	An.Cf = Cf
+	An.TimeDelay = helper.FormatTime(time.Now().Unix() - An.TimePostEnd)
+
 	jsonData, err := json.Marshal(An)
 	if err != nil {
 		L.Debug(err.Error(), LEVEL_ERROR)
 	}
 	return jsonData
+}
+
+func GetCpu() float64 {
+	shellPath := helper.GetPathJoin(Cf.AppPath, "host_info.sh cpu")
+	out := exec.Command("/bin/bash", "-c", shellPath)
+	content, _ := out.Output()
+	value := strings.TrimSpace(string(content))
+	return helper.Round(string(value), 2)
+}
+
+func GetLoad() float64 {
+	shellPath := helper.GetPathJoin(Cf.AppPath, "host_info.sh load")
+	out := exec.Command("/bin/bash", "-c", shellPath)
+	content, _ := out.Output()
+	value := strings.TrimSpace(string(content))
+	return helper.Round(string(value), 2)
 }
 
 //获取统计信息

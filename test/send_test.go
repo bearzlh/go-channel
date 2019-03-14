@@ -87,18 +87,30 @@ func TestSend(t *testing.T) {
 5c88bcfe25c75 [ sql ] [ SQL ] INSERT INTO admin_log (title , content , url , admin_id , username , useragent , ip , createtime) VALUES ('四方投诉订单查询' , '{\"oid\":\"4200000231201810315752798752\",\"lastname\":\"Mouse\"}' , '/admin/orders/searchorder' , 1 , 'admin' , 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36' , '127.0.0.1' , 1552465149) [ RunTime:0.009649s ]
 5c88bcfe25c75 [ debug ] time:[ 2019-03-13 16:19:09 ]	pid:[ 2324 ]	{"code":0,"msg":"","data":"-","debug":[{"file":"\/data\/www\/cps\/application\/main\/service\/AdminService.php","line":276,"function":"getReturn","class":"app\\main\\service\\BaseService","args":[]}]}
 `
+	hourDoc := int64(200000)
+	DocMax := hourDoc / 30
+	count := int64(0)
+	sleep := time.Hour / time.Duration(hourDoc)
+	timeUsed := time.Duration(0)
 	for {
-		id, _ := uuid.NewV4()
+		count++
+		if count > DocMax {
+			break
+		}
 		select {
-		case <-time.NewTimer(time.Millisecond * 33).C:
+		case <-time.After(sleep - timeUsed):
+			start := time.Now().UnixNano()
 			dateLog := helper.TimeFormat("d_H", 0)
 			timeNow := time.Now().Format("2006-01-02 15:04:05")
+			id, _ := uuid.NewV4()
 			sub := strings.Replace(id.String(), "-", "", 10)
 			tmp := strings.Replace(msg, "time_time_time", timeNow, 10)
 			low := len(sub) - 13
-			service.L.Debug(fmt.Sprintf("%s %s", sub[low:], dateLog), service.LEVEL_DEBUG)
+			service.L.Debug(fmt.Sprintf("%s %s %d", sub[low:], dateLog, sleep - timeUsed), service.LEVEL_DEBUG)
 			tmp = strings.Replace(tmp, "5c88bcfe25c75", sub[low:], 37)
 			service.L.WriteAppend("/data/www/cps/runtime/log/201903/"+dateLog+".log", tmp)
+			end := time.Now().UnixNano()
+			timeUsed = time.Duration(end - start)
 		}
 	}
 }
