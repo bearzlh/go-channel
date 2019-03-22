@@ -21,6 +21,7 @@ import (
 
 type Analysis struct {
 	LineCount int64 `json:"line_count"`
+	SleepTime float64 `json:"sleep_time"`
 
 	//请求统计
 	JobCount      int64 `json:"job_count"`
@@ -83,11 +84,8 @@ func CheckHostHealth() {
 	go func() {
 		for {
 			select {
-			case <-time.After(time.Second * 3):
-				HostHealth = GetCpu() > Cf.Monitor.Cpu || GetLoad() > Cf.Monitor.Load
-				if HostHealth {
-					time.Sleep(time.Minute)
-				}
+			case <-time.After(time.Second * 1):
+				An.CpuRate = GetCpu()
 			}
 		}
 	}()
@@ -173,6 +171,7 @@ func InitWorkPool() {
 	LineMap = make(map[string]LineItem)
 	Tail = make(map[string]*tail.Tail)
 	SetWorker(Cf.Factory.WorkerInit)
+	GetSleepTime()
 }
 
 //添加工人

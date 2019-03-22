@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
-	"os"
+	"time"
 	"workerChannel/helper"
 )
 
@@ -14,6 +14,7 @@ const Split = "/"
 
 type ConfigService struct {
 	ReadPath []ReadPath `json:"read_path"`
+	Env      string     `json:"env"`
 	Log      struct {
 		Path       string `json:"path"`
 		Level      string `json:"level"`
@@ -30,6 +31,7 @@ type ConfigService struct {
 		BatchSize       int    `json:"batch_size"`
 		BatchTimeSecond int    `json:"batch_time_second"`
 		SendType        string `json:"send_type"`
+		Index           string `json:"index"`
 	} `json:"msg"`
 	PhpTimeWindow int64    `json:"php_time_window"`
 	AppPath       string `json:"app_path"`
@@ -39,18 +41,19 @@ type ConfigService struct {
 	} `json:"es"`
 	Monitor struct {
 		Cpu       float64 `json:"cpu"`
-		Load      float64 `json:"load"`
-		SleepNs int `json:"sleep_ns"`
+		//Load      float64 `json:"load"`
+		//SleepNs int `json:"sleep_ns"`
 	} `json:"monitor"`
 }
 
 type ReadPath struct {
-	Dir        string `json:"dir"`
-	TimeFormat string `json:"time_format"`
-	Suffix     string `json:"suffix"`
-	Type       string `json:"type"`
-	On         bool   `json:"on"`
-	Continue   bool   `json:"continue"`
+	Dir        string   `json:"dir"`
+	TimeFormat string   `json:"time_format"`
+	Suffix     string   `json:"suffix"`
+	Type       string   `json:"type"`
+	On         bool     `json:"on"`
+	Continue   bool     `json:"continue"`
+	Pick       string `json:"pick"`
 }
 
 var Cf *ConfigService
@@ -80,16 +83,27 @@ func (C *ConfigService) loadFile() *ConfigService {
 	content, err := ioutil.ReadFile(defaultFile)
 	if err != nil {
 		L.outPut("默认文件内容读取失败:" + defaultFile + ":" + err.Error())
-		ExitProgramme(os.Interrupt)
+		time.Sleep(time.Second)
+		L.outPut("再次尝试")
+		C.loadFile()
+		return C
+		//ExitProgramme(os.Interrupt)
 	}
 
 	err = json.Unmarshal(content, &Cf)
 
 	if err != nil {
 		L.outPut("默认内容解析错误:" + defaultFile + ":" + err.Error())
-		ExitProgramme(os.Interrupt)
+		time.Sleep(time.Second)
+		L.outPut("再次尝试")
+		C.loadFile()
+		return C
+		//ExitProgramme(os.Interrupt)
 	}
 
+	if Cf.Env == "" {
+		Cf.Env = "log"
+	}
 	return C
 }
 

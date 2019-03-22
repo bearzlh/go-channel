@@ -25,9 +25,23 @@ type PhpMsg struct {
 	Query         []Query `json:"query"`
 	BookId        string  `json:"book_id"`
 	ReferralId    string  `json:"referral_id"`
-	AgentId       string  `json:"agent_id"`
 	ChapterId     string  `json:"chapter_id"`
 	BookChapterId string  `json:"book_chapter_id"`
+
+	//Cookie参数
+	UserId    string `json:"user_id"`
+	OpenId    string `json:"open_id"`
+	ChannelId string `json:"channel_id"`
+	AgentId   string `json:"agent_id"`
+	AdminId   string `json:"admin_id"`
+	Group     string `json:"group"`
+
+	//地域参数
+	Country  string `json:"country"`
+	Province string `json:"province"`
+	City     string `json:"city"`
+	Operator string `json:"operator"`
+	Access   string `json:"access"`
 
 	//日志内容
 	Message []Content `json:"message"`
@@ -62,13 +76,13 @@ func (p PhpMsg) GetLogType() string {
 }
 
 //获取当前索引对象
-func (p PhpMsg) GetIndexObj(time int64) Index {
-	return Index{IndexName: IndexContent{"log-php-" + helper.TimeFormat("Ymd", time), "go"}}
+func (p PhpMsg) GetIndexObj(env string, time int64) Index {
+	return Index{IndexName: IndexContent{env + "-php-" + helper.TimeFormat("Ymd", time), "go"}}
 }
 
 //获取索引
-func (p PhpMsg) GetIndex(time int64) string {
-	return "log-php-" + helper.TimeFormat("Ymd", time) + "/go"
+func (p PhpMsg) GetIndex(env string, time int64) string {
+	return env + "-php-" + helper.TimeFormat("Ymd", time) + "/go"
 }
 
 func (p PhpMsg) GetLogLine() int64 {

@@ -4,7 +4,6 @@ out=postlog
 dir=package
 es_host_port=192.168.0.109:9200
 php_log_dir=/var/log/cpslog/
-host_list="192.168.0.104 192.168.0.24 192.168.0.25 192.168.0.154"
 deploy_dir=/usr/local/
 
 rm -rf $dir

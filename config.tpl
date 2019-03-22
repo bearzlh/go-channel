@@ -6,7 +6,8 @@
       "suffix": ".log",
       "type": "php",
       "on": true,
-      "continue": true
+      "continue": true,
+      "pick": "cookie,get"
     },
     {
       "dir": "{nginx_log_dir}",
@@ -34,9 +35,7 @@
     "send_type": "es"
   },
   "monitor": {
-    "cpu": 100,
-    "load": 6,
-    "sleep_ns": 1000
+    "cpu": 100
   },
   "server_port": "8081",
   "php_time_window": 2,

@@ -18,31 +18,62 @@ var phpLineLock sync.Mutex
 
 var phpPostLineNumber int64
 var phpPostLineLock sync.Mutex
+var LineTime float64
+var LineCount float64
 
 const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
+const PhpFrontCookie = `.*? NetType:(\w+) IP:.*? \[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] user_id:(\d+)* openid:(.*?) channel_id:(\d+)* agent_id:(\d+)* referral_id:(\d+)*`
+const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\d+)* group:(\d+)* `
+
+var rumtime ReadPath
 
 func PhpProcessLine(Rp ReadPath) {
+	rumtime = Rp
 	var currentId string
 	tail := Tail[Rp.Type]
+	LineCount = 0
+	LineTime = 0
 	for line := range tail.Lines {
-		if HostHealth {
-			time.Sleep(getRateLimit())
-		}
+		Lock.Lock()
+		sleepTime := An.SleepTime
+		Lock.Unlock()
+		time.Sleep(time.Duration(sleepTime))
+		now := time.Now()
 		phpLine := IncreasePhpLineNumber()
 		Lock.Lock()
 		An.TimeEnd = time.Now().Unix()
 		An.TimeWork = helper.FormatTime(An.TimeEnd - An.TimeStart)
 		An.LineCount++
 		Lock.Unlock()
-		text := fmt.Sprintf("[%d] " + line.Text, phpLine)
+		text := fmt.Sprintf("[%d] "+line.Text, phpLine)
 		//记录当前id
 		currentId = PhpLineToJob(text, Rp.Type, currentId)
+		LineCount++
+		LineTime += float64(time.Now().Sub(now))
 	}
 }
 
-func getRateLimit() time.Duration {
-	return time.Duration(Cf.Monitor.SleepNs)
+func GetSleepTime() {
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second):
+				Lock.Lock()
+				if An.SleepTime < 0 {
+					An.SleepTime = LineTime/LineCount
+				}
+				if An.CpuRate > 0 {
+					if An.CpuRate > Cf.Monitor.Cpu {
+						An.SleepTime += float64(time.Microsecond * 5)
+					} else {
+						An.SleepTime -= float64(time.Microsecond * 5)
+					}
+				}
+				Lock.Unlock()
+			}
+		}
+	}()
 }
 
 func PhpLineToJob(text string, Type string, preId string) string {
@@ -119,8 +150,10 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			if err != nil {
 				L.Debug("url parse error"+err.Error()+",url:"+p.Url, LEVEL_ERROR)
 			}else{
-				if len(u.Query()) > 0 {
-					QueryProcess(u.Query(), p)
+				if strings.Contains(rumtime.Pick, "get") {
+					if len(u.Query()) > 0 {
+						QueryProcess(u.Query(), p)
+					}
 				}
 				p.Uri = u.Path
 				p.DomainPort = u.Host
@@ -148,6 +181,36 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			}
 			Message.Content = strings.TrimSpace(string(MatchMessage[4]))
 			p.Message = append(p.Message, Message)
+
+			if strings.Contains(rumtime.Pick, "cookie") {
+				if Message.Content[0:3] == "OS:" && len(p.Uri) >= 6 {
+					if p.Uri[0:6] == "/index" {
+						res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
+						if len(res) > 0 {
+							p.Access = string(res[1])
+							p.Country = string(res[2])
+							p.Province = string(res[3])
+							p.City = string(res[4])
+							p.Operator = string(res[5])
+							p.UserId = string(res[6])
+							p.OpenId = string(res[7])
+							p.ChannelId = string(res[8])
+							p.AgentId = string(res[9])
+						}
+					}
+					if p.Uri[0:6] == "/admin" {
+						res := helper.RegexpMatch(Message.Content, PhpAdminCookie)
+						if len(res) > 0 {
+							p.Country = string(res[1])
+							p.Province = string(res[2])
+							p.City = string(res[3])
+							p.Operator = string(res[4])
+							p.AdminId = string(res[5])
+							p.Group = string(res[6])
+						}
+					}
+				}
+			}
 		} else {
 			if len(p.Message) > 0 {
 				Match := helper.RegexpMatch(line, `^\[\d+\] (.*)`)

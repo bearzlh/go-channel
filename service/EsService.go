@@ -90,7 +90,7 @@ func (E *EsService) BuckWatch() {
 
 //添加数据
 func (E *EsService) BuckAdd(msg object.MsgInterface) {
-	BuckDoc <- object.Doc{Index: msg.GetIndexObj(msg.GetTimestamp()), Content: msg}
+	BuckDoc <- object.Doc{Index: msg.GetIndexObj(Cf.Env, msg.GetTimestamp()), Content: msg}
 	if len(BuckDoc) > Cf.Msg.BatchSize {
 		BuckFull <- true
 	}
@@ -185,7 +185,7 @@ func (E *EsService) Post() {
 			select {
 			case msg := <-PostDoc:
 				content, _ := json.Marshal(msg)
-				url := "http://" + Cf.Es.Host + "/" + msg.GetIndex(msg.GetTimestamp())
+				url := "http://" + Cf.Es.Host + "/" + msg.GetIndex(Cf.Env, msg.GetTimestamp())
 				data := string(content)
 				str, err := E.PostData(url, data)
 				jsonData, _ := simplejson.NewJson([]byte(str))

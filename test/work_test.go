@@ -77,3 +77,9 @@ func TestRun(t *testing.T) {
 		}
 	}
 }
+
+func TestSub(t *testing.T) {
+	now := time.Now()
+	time.Sleep(time.Millisecond * 10)
+	t.Log(float64(time.Now().Sub(now)))
+}

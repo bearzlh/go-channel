@@ -6,7 +6,9 @@
       "suffix": ".log",
       "type": "php",
       "on": true,
-      "continue": true
+      "continue": true,
+      "index": "log-php-test",
+      "pick": "cookie,get"
     },
     {
       "dir": "/usr/local/openresty/nginx/logs/",
@@ -14,9 +16,11 @@
       "suffix": "access.log",
       "type": "nginx",
       "on": false,
-      "continue": true
+      "continue": true,
+      "index": "log-nginx-test"
     }
   ],
+  "env": "test",
   "log": {
     "path": "log",
     "level": "debug",
@@ -34,9 +38,7 @@
     "send_type": "es"
   },
   "monitor": {
-    "cpu": 550,
-    "load": 5.5,
-    "sleep_ns": 1000
+    "cpu": 80
   },
   "server_port": "8081",
   "php_time_window": 2,

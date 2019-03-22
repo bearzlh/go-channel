@@ -33,14 +33,16 @@ func SetRunTimePosition() {
 		if rp.On {
 			file := GetPositionFile(rp.Type)
 			tail := Tail[rp.Type]
-			var line int64
-			if rp.Type == "php" {
-				line = GetPhpPostLineNumber()
-			} else {
-				line = GetNginxPostLineNumber()
+			if tail != nil {
+				var line int64
+				if rp.Type == "php" {
+					line = GetPhpPostLineNumber()
+				} else {
+					line = GetNginxPostLineNumber()
+				}
+				P := object.Position{File: tail.Filename, Line: line}
+				SetPosition(file, P)
 			}
-			P := object.Position{File: tail.Filename, Line: line}
-			SetPosition(file, P)
 		}
 	}
 }
