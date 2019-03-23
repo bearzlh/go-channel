@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os/exec"
+
 	//_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -32,6 +34,7 @@ func main() {
 	if service.Cf.ServerPort != "" {
 		go func() {
 			http.HandleFunc("/", Status)
+			http.HandleFunc("/update", Update)
 			service.L.Debug("status page,listen "+service.Cf.ServerPort, service.LEVEL_DEBUG)
 			err := http.ListenAndServe(":"+service.Cf.ServerPort, nil)
 			if err != nil {
@@ -116,6 +119,20 @@ func Status(w http.ResponseWriter, req *http.Request) {
 	_, err := w.Write(service.GetAnalysis(true))
 	if err != nil {
 		service.L.Debug(err.Error(), service.LEVEL_ERROR)
+	}
+}
+
+//版本控制
+func Update(w http.ResponseWriter, req *http.Request) {
+	if req.FormValue("version") != "" {
+		version := req.Form.Get("version")
+		shellPath := helper.GetPathJoin(service.Cf.AppPath, "deploy.sh "+version)
+		service.L.Debug("version control:"+shellPath, service.LEVEL_ALERT)
+		cmd := exec.Command("/bin/bash", "-c", shellPath)
+		_, err := cmd.Output()
+		if err != nil {
+			service.L.Debug(err.Error(), service.LEVEL_ERROR)
+		}
 	}
 }
 

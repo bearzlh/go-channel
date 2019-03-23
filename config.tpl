@@ -35,11 +35,13 @@
     "send_type": "es"
   },
   "monitor": {
-    "cpu": 100
+    "cpu": 200,
+    "sleep_interval_ns": 100
   },
   "server_port": "8081",
   "php_time_window": 2,
   "es": {
     "host": "es_host_port"
-  }
+  },
+  "version": "0.5"
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"workerChannel/service"
 )
 
 func TestPost(t *testing.T) {
@@ -14,4 +15,10 @@ func TestPost(t *testing.T) {
 	str, _ := ioutil.ReadAll(res.Body)
 	result, _ := simplejson.NewJson([]byte(str))
 	t.Log(result.Get("_shards").Get("successful"), string(str))
+}
+
+func TestUrl(t *testing.T) {
+	urlStr := `https://wx4483982eb2874c7c.zsjwau.cn:443/t/6886704%!D(MISSING)]`
+	u, _ := service.ParseUrl(urlStr)
+	t.Log(u)
 }

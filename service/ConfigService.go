@@ -15,6 +15,7 @@ const Split = "/"
 type ConfigService struct {
 	ReadPath []ReadPath `json:"read_path"`
 	Env      string     `json:"env"`
+	Version  string     `json:"version"`
 	Log      struct {
 		Path       string `json:"path"`
 		Level      string `json:"level"`
@@ -24,14 +25,12 @@ type ConfigService struct {
 	Factory struct {
 		WorkerMax  int `json:"worker_max"`
 		WorkerInit int `json:"worker_init"`
-		JobPerWork int `json:"job_per_work"`
 	} `json:"factory"`
 	Msg struct {
 		IsBatch         bool   `json:"is_batch"`
 		BatchSize       int    `json:"batch_size"`
 		BatchTimeSecond int    `json:"batch_time_second"`
 		SendType        string `json:"send_type"`
-		Index           string `json:"index"`
 	} `json:"msg"`
 	PhpTimeWindow int64    `json:"php_time_window"`
 	AppPath       string `json:"app_path"`
@@ -42,7 +41,7 @@ type ConfigService struct {
 	Monitor struct {
 		Cpu       float64 `json:"cpu"`
 		//Load      float64 `json:"load"`
-		//SleepNs int `json:"sleep_ns"`
+		SleepIntervalNs int `json:"sleep_interval_ns"`
 	} `json:"monitor"`
 }
 

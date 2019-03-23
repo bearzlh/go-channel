@@ -1,11 +1,12 @@
 #!/bin/bash
 os=mac
 out=postlog
+env=dev
 dir=package
 es_host_port=192.168.0.109:9200
 php_log_dir=/var/log/cpslog/
 deploy_dir=/usr/local/
-
+version=`cat config.tpl | jq ".version" | sed 's/"//g'`
 rm -rf $dir
 mkdir -p $dir
 
@@ -16,6 +17,15 @@ fi
 if [ ! -z "$2" ] ; then
     os=$2
 fi
+
+if [ ! -z "$3" ] ; then
+    env=$3
+fi
+
+if [ $env == "pro" ] ; then
+    es_host_port="10.250.3.1:9200,10.250.3.2:9200,10.250.3.3:9200,10.250.3.4:9200,10.250.3.5:9200"
+fi
+
 
 if [ $os == "mac" ] ; then
     echo "building for $os"
@@ -31,9 +41,17 @@ else
     exit
 fi
 
-upx $dir/$out
+upx $dir/$out > /dev/null
 
-cat ./config.tpl | sed "s#php_log_dir#$php_log_dir#"|sed "s#es_host_port#$es_host_port#"|jq '{read_path:[.read_path[0]],log,factory,msg,server_port,php_time_window,es,monitor}' > $dir/config.json
+cat ./config.tpl | sed "s#php_log_dir#$php_log_dir#"|sed "s#es_host_port#$es_host_port#"|jq '{read_path:[.read_path[0]],log,factory,msg,server_port,php_time_window,es,monitor,version}' > $dir/config.json
 
 cp host_info.sh $dir
-echo "success in $dir"
+cp postlog.service $dir
+cp deploy.sh $dir
+
+package_tar=package_v_${env}${version}.tar.gz
+tar zcf $package_tar package
+./scp.sh $package_tar > /dev/null
+rm $package_tar
+rm -rf package
+echo "success"

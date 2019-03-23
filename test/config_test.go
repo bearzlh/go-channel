@@ -51,3 +51,7 @@ func TestBranch(t *testing.T) {
 func TestAn(t *testing.T) {
  	t.Log(strings.Contains(service.Cf.ReadPath[0].Pick, "cooki1e"))
 }
+
+func TestHost(t *testing.T) {
+	t.Log(service.Es.GetHost())
+}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/bitly/go-simplejson"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"strings"
@@ -29,7 +30,7 @@ func (E *EsService) CheckEsCanAccess() {
 			select {
 			case <-t.C:
 				t.Reset(time.Second * 1)
-				_, err := E.GetData("http://" + Cf.Es.Host)
+				_, err := E.GetData("http://" + E.GetHost())
 				if err == nil {
 					if len(EsCanUse) == 1 {
 						L.Debug("es api recover", LEVEL_DEBUG)
@@ -44,6 +45,13 @@ func (E *EsService) CheckEsCanAccess() {
 			}
 		}
 	}()
+}
+
+func (E *EsService) GetHost() string {
+	hostStrings := strings.Split(Cf.Es.Host, ",")
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	return hostStrings[r.Intn(len(hostStrings))]
 }
 
 func (E *EsService) BuckWatch() {
@@ -151,7 +159,7 @@ func (E *EsService) SaveDocToBulk(content []string) {
 //发送批量数据
 func (E *EsService) BuckPost(content []string) bool {
 	postData := strings.Join(content, "\n") + "\n"
-	url := "http://"+Cf.Es.Host+"/_bulk"
+	url := "http://"+E.GetHost()+"/_bulk"
 	str, err := E.PostData(url, postData)
 	jsonData, _ := simplejson.NewJson([]byte(str))
 	errors, err := jsonData.Get("data").Get("errors").Bool()
@@ -185,7 +193,7 @@ func (E *EsService) Post() {
 			select {
 			case msg := <-PostDoc:
 				content, _ := json.Marshal(msg)
-				url := "http://" + Cf.Es.Host + "/" + msg.GetIndex(Cf.Env, msg.GetTimestamp())
+				url := "http://" + E.GetHost() + "/" + msg.GetIndex(Cf.Env, msg.GetTimestamp())
 				data := string(content)
 				str, err := E.PostData(url, data)
 				jsonData, _ := simplejson.NewJson([]byte(str))

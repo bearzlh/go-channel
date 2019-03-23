@@ -23,13 +23,13 @@ var LineCount float64
 
 const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
-const PhpFrontCookie = `.*? NetType:(\w+) IP:.*? \[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] user_id:(\d+)* openid:(.*?) channel_id:(\d+)* agent_id:(\d+)* referral_id:(\d+)*`
-const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\d+)* group:(\d+)* `
+const PhpFrontCookie = `.*? NetType:(\w+) IP:.*? \[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] user_id:(\w+)* openid:(.*?)* channel_id:(\w+)* agent_id:(\w+)* referral_id:(\w+)*`
+const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\w+)* group:(\w+)* `
 
-var rumtime ReadPath
+var readPath ReadPath
 
 func PhpProcessLine(Rp ReadPath) {
-	rumtime = Rp
+	readPath = Rp
 	var currentId string
 	tail := Tail[Rp.Type]
 	LineCount = 0
@@ -60,15 +60,15 @@ func GetSleepTime() {
 			select {
 			case <-time.After(time.Second):
 				Lock.Lock()
-				if An.SleepTime < 0 {
-					An.SleepTime = LineTime/LineCount
-				}
 				if An.CpuRate > 0 {
 					if An.CpuRate > Cf.Monitor.Cpu {
-						An.SleepTime += float64(time.Microsecond * 5)
+						An.SleepTime += float64(Cf.Monitor.SleepIntervalNs)
 					} else {
-						An.SleepTime -= float64(time.Microsecond * 5)
+						An.SleepTime -= float64(Cf.Monitor.SleepIntervalNs)
 					}
+				}
+				if An.SleepTime < 0 {
+					An.SleepTime = 0
 				}
 				Lock.Unlock()
 			}
@@ -146,11 +146,11 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			p.Method = string(s[5])
 			p.Url = strings.TrimSpace(string(s[6]))
 			p.Timestamp = fmt.Sprintf("%d", time.Now().Unix())
-			u, err := url.Parse(p.Url)
+			u, err := ParseUrl(p.Url)
 			if err != nil {
 				L.Debug("url parse error"+err.Error()+",url:"+p.Url, LEVEL_ERROR)
 			}else{
-				if strings.Contains(rumtime.Pick, "get") {
+				if strings.Contains(readPath.Pick, "get") {
 					if len(u.Query()) > 0 {
 						QueryProcess(u.Query(), p)
 					}
@@ -182,7 +182,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			Message.Content = strings.TrimSpace(string(MatchMessage[4]))
 			p.Message = append(p.Message, Message)
 
-			if strings.Contains(rumtime.Pick, "cookie") {
+			if strings.Contains(readPath.Pick, "cookie") {
 				if Message.Content[0:3] == "OS:" && len(p.Uri) >= 6 {
 					if p.Uri[0:6] == "/index" {
 						res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
@@ -289,4 +289,18 @@ func IncreasePhpLineNumber() int64 {
 	defer phpLineLock.Unlock()
 	phpLineNumber++
 	return phpLineNumber
+}
+
+func ParseUrl(urlStr string) (*url.URL, error) {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		L.Debug("url parse error"+err.Error()+",url:"+urlStr, LEVEL_ERROR)
+		if strings.Contains(urlStr, "%!") {
+			L.Debug("url parse save"+",url:"+urlStr, LEVEL_DEBUG)
+			urlSplit := strings.Split(urlStr, "%!")
+			return ParseUrl(urlSplit[0])
+		}
+	}
+
+	return u, err
 }
