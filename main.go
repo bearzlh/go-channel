@@ -35,6 +35,7 @@ func main() {
 		go func() {
 			http.HandleFunc("/", Status)
 			http.HandleFunc("/update", Update)
+			http.HandleFunc("/stop", Stop)
 			service.L.Debug("status page,listen "+service.Cf.ServerPort, service.LEVEL_DEBUG)
 			err := http.ListenAndServe(":"+service.Cf.ServerPort, nil)
 			if err != nil {
@@ -120,6 +121,13 @@ func Status(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		service.L.Debug(err.Error(), service.LEVEL_ERROR)
 	}
+}
+
+//停止日志采集
+func Stop(w http.ResponseWriter, req *http.Request) {
+	shellPath := helper.GetPathJoin(service.Cf.AppPath, "stop.sh")
+	service.L.Debug("stop control:"+shellPath, service.LEVEL_ALERT)
+	exec.Command("/bin/bash", "-c", shellPath)
 }
 
 //版本控制

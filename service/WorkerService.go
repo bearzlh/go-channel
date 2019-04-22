@@ -93,7 +93,7 @@ func CheckHostHealth() {
 
 //业务处理50%
 func (w *Worker) handleJob(jobId string) {
-	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
+	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_NOTICE)
 	var JobError int64 = 0
 	if item, ok := GetMap(jobId);ok {
 		if item.Type == "php" {
@@ -128,14 +128,14 @@ func (w *Worker) handleJob(jobId string) {
 		Lock.Unlock()
 		DelMap(jobId)
 	}else{
-		L.Debug("job error,for id=>"+jobId, LEVEL_ERROR)
+		L.Debug("job error,for id=>"+jobId, LEVEL_NOTICE)
 	}
 }
 
 //初始化任务队列
 func (w *Worker) Start() {
 	go func() {
-		L.Debug(fmt.Sprintf("worker %s waiting", w.ID), LEVEL_DEBUG)
+		L.Debug(fmt.Sprintf("worker %s waiting", w.ID), LEVEL_NOTICE)
 		for {
 			select {
 			case jobID := <-JobQueue:
@@ -157,7 +157,7 @@ func NewWorker() {
 	worker := &Worker{ID: id.String(), IsWorking: false}
 	worker.Start()
 	WorkPool.WorkerList = append(WorkPool.WorkerList, worker)
-	L.Debug(fmt.Sprintf("worker %s started", worker.ID), LEVEL_DEBUG)
+	L.Debug(fmt.Sprintf("worker %s started", worker.ID), LEVEL_NOTICE)
 }
 
 //初始化工厂
@@ -205,7 +205,7 @@ func SetWorker(n int) {
 
 //执行下一个文件
 func TailNextFile(FileName string, Rp ReadPath) {
-	L.Debug("check " + Rp.Type, LEVEL_DEBUG)
+	L.Debug("check " + Rp.Type, LEVEL_NOTICE)
 	f := PhpProcessLine
 	switch Rp.Type {
 	case "php":
@@ -217,11 +217,11 @@ func TailNextFile(FileName string, Rp ReadPath) {
 	}
 	if Tail[Rp.Type] != nil && Tail[Rp.Type].Filename != "" {
 		if Tail[Rp.Type].Filename != FileName {
-			L.Debug("file changed:"+Tail[Rp.Type].Filename+"->"+FileName, LEVEL_DEBUG)
+			L.Debug("file changed:"+Tail[Rp.Type].Filename+"->"+FileName, LEVEL_NOTICE)
 			Tail[Rp.Type].Cleanup()
 			err := Tail[Rp.Type].Stop()
 			if err != nil {
-				L.Debug("file stop error:"+err.Error(), LEVEL_DEBUG)
+				L.Debug("file stop error:"+err.Error(), LEVEL_ERROR)
 			}
 			go func() {
 				TailFile(FileName, Rp, f)
@@ -231,7 +231,7 @@ func TailNextFile(FileName string, Rp ReadPath) {
 		}
 	} else {
 		go func() {
-			L.Debug("file init->"+FileName, LEVEL_DEBUG)
+			L.Debug("file init->"+FileName, LEVEL_NOTICE)
 			TailFile(FileName, Rp, f)
 		}()
 	}
@@ -423,6 +423,7 @@ func SetAnalysis() {
 	}
 	An = Analysis{}
 	err1 := json.Unmarshal(file, &An)
+	An.JobProcessing = 0
 	if err1 != nil {
 		L.Debug("analysis unmarshal error"+err1.Error(), LEVEL_ERROR)
 	}

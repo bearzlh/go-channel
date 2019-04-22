@@ -29,11 +29,11 @@ url=http://dev104.qcread.cn/$tar_file
 deploy_dir=/usr/local/postlog
 backup=/usr/local/postlog_`date "+%Y%m%d%H%M%S"`
 
+cd ~
+
 if [ -f "$tar_file" ] ; then
     rm $tar_file
 fi
-
-cd ~
 
 wget $url
 tar zxf $tar_file

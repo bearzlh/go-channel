@@ -48,10 +48,18 @@ cat ./config.tpl | sed "s#php_log_dir#$php_log_dir#"|sed "s#es_host_port#$es_hos
 cp host_info.sh $dir
 cp postlog.service $dir
 cp deploy.sh $dir
+cp stop.sh $dir
+cp controller.sh $dir
+if [ "$env" != "pro" ]; then
+    cat hosts.txt|grep '^dev' > ${dir}/hosts.txt
+else
+    cat hosts.txt|grep -v '^dev' > ${dir}/hosts.txt
+fi
+
 
 package_tar=package_v_${env}${version}.tar.gz
 tar zcf $package_tar package
 ./scp.sh $package_tar > /dev/null
 rm $package_tar
-rm -rf package
+#rm -rf package
 echo "success"
