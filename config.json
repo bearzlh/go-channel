@@ -39,6 +39,8 @@
   },
   "monitor": {
     "cpu": 80,
+    "memory_restart": 10,
+    "memory_stop": 20,
     "sleep_interval_ns": 200
   },
   "server_port": "8081",
@@ -46,5 +48,5 @@
   "es": {
     "host": "192.168.0.109:9200"
   },
-  "version": "0.7"
+  "version": "0.8"
 }

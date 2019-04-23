@@ -19,4 +19,4 @@
 
 set -o nounset                                  # Treat unset variables as an error
 
-systemctl stop postlog
+systemctl $1 postlog

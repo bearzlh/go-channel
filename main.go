@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"os/exec"
 
 	//_ "net/http/pprof"
 	"os"
@@ -33,10 +32,11 @@ func main() {
 	//启动web服务
 	if service.Cf.ServerPort != "" {
 		go func() {
-			http.HandleFunc("/", Status)
-			http.HandleFunc("/update", Update)
-			http.HandleFunc("/stop", Stop)
-			service.L.Debug("status page,listen "+service.Cf.ServerPort, service.LEVEL_DEBUG)
+			http.HandleFunc("/", service.Status)
+			http.HandleFunc("/update", service.Update)
+			http.HandleFunc("/stop", service.Stop)
+			http.HandleFunc("/restart", service.Restart)
+			service.L.Debug("status page,listen "+service.Cf.ServerPort, service.LEVEL_INFO)
 			err := http.ListenAndServe(":"+service.Cf.ServerPort, nil)
 			if err != nil {
 				service.L.Debug(err.Error(), service.LEVEL_ERROR)
@@ -112,39 +112,6 @@ func ServiceInit() {
 	//检测批量发送队列
 	if service.Cf.Msg.IsBatch {
 		service.Es.BuckWatch()
-	}
-}
-
-//状态页打印
-func Status(w http.ResponseWriter, req *http.Request) {
-	_, err := w.Write(service.GetAnalysis(true))
-	if err != nil {
-		service.L.Debug(err.Error(), service.LEVEL_ERROR)
-	}
-}
-
-//停止日志采集
-func Stop(w http.ResponseWriter, req *http.Request) {
-	shellPath := helper.GetPathJoin(service.Cf.AppPath, "stop.sh")
-	service.L.Debug("stop control:"+shellPath, service.LEVEL_ALERT)
-	cmd := exec.Command("/bin/bash", "-c", shellPath)
-	_, err := cmd.Output()
-	if err != nil {
-		service.L.Debug(err.Error(), service.LEVEL_ERROR)
-	}
-}
-
-//版本控制
-func Update(w http.ResponseWriter, req *http.Request) {
-	if req.FormValue("version") != "" {
-		version := req.Form.Get("version")
-		shellPath := helper.GetPathJoin(service.Cf.AppPath, "deploy.sh "+version)
-		service.L.Debug("version control:"+shellPath, service.LEVEL_ALERT)
-		cmd := exec.Command("/bin/bash", "-c", shellPath)
-		_, err := cmd.Output()
-		if err != nil {
-			service.L.Debug(err.Error(), service.LEVEL_ERROR)
-		}
 	}
 }
 

@@ -61,5 +61,5 @@ package_tar=package_v_${env}${version}.tar.gz
 tar zcf $package_tar package
 ./scp.sh $package_tar > /dev/null
 rm $package_tar
-#rm -rf package
+rm -rf package
 echo "success"

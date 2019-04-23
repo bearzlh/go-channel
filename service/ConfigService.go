@@ -40,6 +40,8 @@ type ConfigService struct {
 	} `json:"es"`
 	Monitor struct {
 		Cpu       float64 `json:"cpu"`
+		MemRestart       float64 `json:"memory_restart"`
+		MemStop       float64 `json:"memory_stop"`
 		//Load      float64 `json:"load"`
 		SleepIntervalNs int `json:"sleep_interval_ns"`
 	} `json:"monitor"`

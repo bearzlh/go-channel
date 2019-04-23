@@ -10,12 +10,12 @@ func GetPosition(file string) object.Position {
 	content, err := ioutil.ReadFile(file)
 	P := object.Position{}
 	if err != nil {
-		L.Debug("open position file err "+err.Error(), LEVEL_DEBUG)
+		L.Debug("open position file err "+err.Error(), LEVEL_INFO)
 		return P
 	}
 	errUnmarshal := json.Unmarshal(content, &P)
 	if errUnmarshal != nil {
-		L.Debug("position file unmarshal err "+errUnmarshal.Error(), LEVEL_DEBUG)
+		L.Debug("position file unmarshal err "+errUnmarshal.Error(), LEVEL_INFO)
 	}
 	return P
 }
@@ -23,7 +23,7 @@ func GetPosition(file string) object.Position {
 func SetPosition(file string, P object.Position) {
 	content, err := json.Marshal(P)
 	if err != nil {
-		L.Debug("position file marshal err "+err.Error(), LEVEL_ERROR)
+		L.Debug("position file marshal err "+err.Error(), LEVEL_INFO)
 	}
 	L.WriteOverride(file, string(content))
 }

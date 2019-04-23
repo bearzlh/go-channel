@@ -44,7 +44,7 @@ getCpu ()
     if [ $os == "Mac" ] ; then
         echo `top -c a -l 5|grep $keywords|awk '{print $3}'|tail -n 1`
     else
-        echo `ps -e -o 'comm,pcpu'|grep $keywords|awk '{print $2}'`
+        echo `top -b -n 1|grep $keywords|awk '{print $9}'`
     fi   
 }	# ----------  end of function getCpu  ----------
 
@@ -53,15 +53,13 @@ getCpu ()
 #---  FUNCTION  ----------------------------------------------------------------
 #          NAME:  getMem
 #   DESCRIPTION:  获取当前进程内存
-#    PARAMETERS:  
-#       RETURNS:  
+#    PARAMETERS:
+#       RETURNS:
 #-------------------------------------------------------------------------------
 getMem ()
 {
-    if [ $os == "Mac" ] ; then
-
-    else
-        echo `ps -e -o 'comm,rsz'|grep $keywords|awk '{print $2}'`
+    if [ $os != "Mac" ] ; then
+        echo `top -b -n 1|grep $keywords|awk '{print $10}'`
     fi
 }	# ----------  end of function getMem  ----------
 

@@ -43,6 +43,7 @@ type Analysis struct {
 	SysMemoryUsed  uint64  `json:"sys_memory_used_M"`
 	CpuRate        float64 `json:"cpu_rate"`
 	Load           float64 `json:"load"`
+	MemRate        float64 `json:"mem_rate"`
 
 	BatchLength int `json:"batch_length"`
 
@@ -86,6 +87,15 @@ func CheckHostHealth() {
 			select {
 			case <-time.After(time.Second * 1):
 				An.CpuRate = GetCpu()
+				An.MemRate = GetMem()
+				if An.MemRate > Cf.Monitor.MemRestart {
+					L.Debug("内存使用率超过10%，进程重启", LEVEL_NOTICE)
+					RestartCmd()
+				}
+				if An.MemRate > Cf.Monitor.MemStop {
+					L.Debug("内存使用率超过20%，进程关闭", LEVEL_ALERT)
+					StopCmd()
+				}
 			}
 		}
 	}()
@@ -93,7 +103,7 @@ func CheckHostHealth() {
 
 //业务处理50%
 func (w *Worker) handleJob(jobId string) {
-	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_NOTICE)
+	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	var JobError int64 = 0
 	if item, ok := GetMap(jobId);ok {
 		if item.Type == "php" {
@@ -128,7 +138,7 @@ func (w *Worker) handleJob(jobId string) {
 		Lock.Unlock()
 		DelMap(jobId)
 	}else{
-		L.Debug("job error,for id=>"+jobId, LEVEL_NOTICE)
+		L.Debug("job error,for id=>"+jobId, LEVEL_INFO)
 	}
 }
 
@@ -239,7 +249,7 @@ func TailNextFile(FileName string, Rp ReadPath) {
 
 //执行查询
 func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
-	L.Debug("current_file=>"+FileName, LEVEL_DEBUG)
+	L.Debug("current_file=>"+FileName, LEVEL_INFO)
 	whence := io.SeekCurrent
 	var position, currentLine int64 = 0, 0
 	if Rp.Continue {
@@ -256,11 +266,11 @@ func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
 	}
 
 	if Rp.Type == "php" {
-		L.Debug(fmt.Sprintf("get php line %d", currentLine), LEVEL_DEBUG)
+		L.Debug(fmt.Sprintf("get php line %d", currentLine), LEVEL_INFO)
 		SetPhpLineNumber(currentLine)
 		SetPhpPostLineNumber(currentLine, true)
 	} else {
-		L.Debug(fmt.Sprintf("get nginx line %d", currentLine), LEVEL_DEBUG)
+		L.Debug(fmt.Sprintf("get nginx line %d", currentLine), LEVEL_INFO)
 		SetNginxLineNumber(currentLine)
 		SetNginxPostLineNumber(currentLine, true)
 	}
@@ -385,6 +395,7 @@ func GetAnalysis(host bool) []byte {
 	if host {
 		An.CpuRate = GetCpu()
 		An.Load = GetLoad()
+		An.MemRate = GetMem()
 	}
 
 	An.HostHealth = HostHealth
@@ -408,6 +419,14 @@ func GetCpu() float64 {
 
 func GetLoad() float64 {
 	shellPath := helper.GetPathJoin(Cf.AppPath, "host_info.sh load")
+	out := exec.Command("/bin/bash", "-c", shellPath)
+	content, _ := out.Output()
+	value := strings.TrimSpace(string(content))
+	return helper.Round(string(value), 2)
+}
+
+func GetMem() float64 {
+	shellPath := helper.GetPathJoin(Cf.AppPath, "host_info.sh memory")
 	out := exec.Command("/bin/bash", "-c", shellPath)
 	content, _ := out.Output()
 	value := strings.TrimSpace(string(content))

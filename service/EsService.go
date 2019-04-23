@@ -33,12 +33,12 @@ func (E *EsService) CheckEsCanAccess() {
 				_, err := E.GetData("http://" + E.GetHost())
 				if err == nil {
 					if len(EsCanUse) == 1 {
-						L.Debug("es api recover", LEVEL_DEBUG)
+						L.Debug("es api recover", LEVEL_NOTICE)
 						<-EsCanUse
 					}
 				} else {
 					if len(EsCanUse) == 0 {
-						L.Debug("es api error"+err.Error(), LEVEL_DEBUG)
+						L.Debug("es api error"+err.Error(), LEVEL_ERROR)
 						EsCanUse <- true
 					}
 				}
@@ -63,32 +63,26 @@ func (E *EsService) BuckWatch() {
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(EsCanUse) == 0 {
 					if len(BuckDoc) > 0 {
-						L.Debug("timeout to post", LEVEL_DEBUG)
+						L.Debug("timeout to post", LEVEL_NOTICE)
 						Es.BuckPost(E.ProcessBulk())
 					} else {
 						L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 					}
 				} else {
 					if len(BuckDoc) > 0 {
-						L.Debug("timeout to post, waiting", LEVEL_DEBUG)
+						L.Debug("timeout to post, waiting", LEVEL_NOTICE)
 					} else {
 						L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 					}
 				}
 			case <-BuckClose:
-				L.Debug("config changed, BuckClosed", LEVEL_DEBUG)
+				L.Debug("config changed, BuckClosed", LEVEL_NOTICE)
 				return
 			case <-BuckFull:
-				if len(EsCanUse) == 0 {
-					if len(BuckDoc) > 0 {
-						L.Debug("size over to post", LEVEL_DEBUG)
-						Es.BuckPost(E.ProcessBulk())
-					}
-				} else {
-					if len(BuckDoc) > 0 {
-						L.Debug("size over to post, wait", LEVEL_DEBUG)
-						Es.BuckPost(E.ProcessBulk())
-					}
+				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
+				if len(BuckDoc) > 0 {
+					L.Debug("size over to post", LEVEL_NOTICE)
+					Es.BuckPost(E.ProcessBulk())
 				}
 
 			}
@@ -99,7 +93,7 @@ func (E *EsService) BuckWatch() {
 //添加数据
 func (E *EsService) BuckAdd(msg object.MsgInterface) {
 	BuckDoc <- object.Doc{Index: msg.GetIndexObj(Cf.Env, msg.GetTimestamp()), Content: msg}
-	if len(BuckDoc) > Cf.Msg.BatchSize {
+	if len(BuckDoc) > Cf.Msg.BatchSize && len(EsCanUse) == 0 {
 		BuckFull <- true
 	}
 }
@@ -186,7 +180,7 @@ func (E *EsService) Post() {
 	go func() {
 		for {
 			if len(EsCanUse) == 1 {
-				L.Debug("es cannot use, wait", LEVEL_DEBUG)
+				L.Debug("es cannot use, wait", LEVEL_INFO)
 				time.Sleep(time.Second * 5)
 				continue
 			}

@@ -20,7 +20,7 @@
   ],
   "log": {
     "path": "/var/log/postlog/",
-    "level": "error",
+    "level": "info",
     "format_type": "time",
     "format": "Ym/d_H"
   },
@@ -36,6 +36,8 @@
   },
   "monitor": {
     "cpu": 200,
+    "memory_restart": 10,
+    "memory_stop": 20,
     "sleep_interval_ns": 100
   },
   "server_port": "8081",
@@ -43,5 +45,5 @@
   "es": {
     "host": "es_host_port"
   },
-  "version": "0.7"
+  "version": "0.8"
 }
