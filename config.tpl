@@ -43,5 +43,5 @@
   "es": {
     "host": "es_host_port"
   },
-  "version": "0.6"
+  "version": "0.7"
 }

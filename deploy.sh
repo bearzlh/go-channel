@@ -56,5 +56,7 @@ if [ "$?" -ne "0" ] ; then
 fi
 
 cp -r package/* $deploy_dir/
+chmod +x $deploy_dir/*.sh
+
 rm -rf package
 systemctl restart postlog

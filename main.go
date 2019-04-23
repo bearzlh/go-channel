@@ -127,7 +127,11 @@ func Status(w http.ResponseWriter, req *http.Request) {
 func Stop(w http.ResponseWriter, req *http.Request) {
 	shellPath := helper.GetPathJoin(service.Cf.AppPath, "stop.sh")
 	service.L.Debug("stop control:"+shellPath, service.LEVEL_ALERT)
-	exec.Command("/bin/bash", "-c", shellPath)
+	cmd := exec.Command("/bin/bash", "-c", shellPath)
+	_, err := cmd.Output()
+	if err != nil {
+		service.L.Debug(err.Error(), service.LEVEL_ERROR)
+	}
 }
 
 //版本控制

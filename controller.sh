@@ -57,7 +57,7 @@ host_action() {
     action=$1
     args=$2
     filter=$3
-    for host in `cat ./hosts.txt|grep $filter` ; do
+    for host in `cat ./hosts.txt|grep -e $filter` ; do
         nickname=`echo $host | cut -d '#' -f1`
         hostname=`echo $host | cut -d '#' -f2`
         $action $nickname $hostname $args
@@ -121,7 +121,7 @@ case $1 in
         if [ "$#" = "3" ]; then
             filter=$3
         else
-            filter="*"
+            filter=".*"
         fi
         host_action info $2 ${filter}
         ;;
@@ -132,7 +132,7 @@ case $1 in
         if [ "$#" = "3" ]; then
             filter=$3
         else
-            filter="*"
+            filter=".*"
         fi
         echo "update before"
         host_action info cf.version ${filter}
