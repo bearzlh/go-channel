@@ -4,3 +4,4 @@ log/*
 postlog*
 package
 .analysis
+hosts.txt
