@@ -20,7 +20,7 @@ func Stop(w http.ResponseWriter, req *http.Request) {
 }
 
 func StopCmd() {
-	shellPath := helper.GetPathJoin(Cf.AppPath, "stop.sh stop")
+	shellPath := helper.GetPathJoin(Cf.AppPath, "controller.sh stop")
 	L.Debug("stop control:"+shellPath, LEVEL_ALERT)
 	cmd := exec.Command("/bin/bash", "-c", shellPath)
 	_, err := cmd.Output()
@@ -33,9 +33,24 @@ func Restart(w http.ResponseWriter, req *http.Request) {
 	RestartCmd()
 }
 
+func Config(w http.ResponseWriter, req *http.Request) {
+	if req.FormValue("key") != "" && req.FormValue("value") != ""{
+		key := req.Form.Get("key")
+		value := req.Form.Get("value")
+		shellPath := helper.GetPathJoin(Cf.AppPath, "controller.sh update_config "+key+" "+value)
+		L.Debug("update config:"+shellPath, LEVEL_ALERT)
+		cmd := exec.Command("/bin/bash", "-c", shellPath)
+		content, err := cmd.Output()
+		if err != nil {
+			L.Debug(err.Error(), LEVEL_ERROR)
+		}
+		L.Debug(string(content), LEVEL_INFO)
+	}
+}
+
 func RestartCmd() {
-	shellPath := helper.GetPathJoin(Cf.AppPath, "stop.sh restart")
-	L.Debug("stop control:"+shellPath, LEVEL_ALERT)
+	shellPath := helper.GetPathJoin(Cf.AppPath, "controller.sh restart")
+	L.Debug("restart control:"+shellPath, LEVEL_ALERT)
 	cmd := exec.Command("/bin/bash", "-c", shellPath)
 	_, err := cmd.Output()
 	if err != nil {

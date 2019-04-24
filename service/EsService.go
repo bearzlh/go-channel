@@ -64,7 +64,9 @@ func (E *EsService) BuckWatch() {
 				if len(EsCanUse) == 0 {
 					if len(BuckDoc) > 0 {
 						L.Debug("timeout to post", LEVEL_NOTICE)
-						Es.BuckPost(E.ProcessBulk())
+						go func() {
+							Es.BuckPost(E.ProcessBulk())
+						}()
 					} else {
 						L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 					}
@@ -82,7 +84,9 @@ func (E *EsService) BuckWatch() {
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
 					L.Debug("size over to post", LEVEL_NOTICE)
-					Es.BuckPost(E.ProcessBulk())
+					go func() {
+						Es.BuckPost(E.ProcessBulk())
+					}()
 				}
 
 			}
@@ -99,14 +103,19 @@ func (E *EsService) BuckAdd(msg object.MsgInterface) {
 }
 
 //组装批量数据
-func (E *EsService) ProcessBulk() []string {
+func (E *EsService) ProcessBulk() (int64, []string) {
 	bulkContent := make([]string, 0)
 	lenBulk := Cf.Msg.BatchSize
 	if len(BuckDoc) < Cf.Msg.BatchSize {
 		lenBulk = len(BuckDoc)
 	}
+
+	phpLine := int64(0)
 	for i := 0; i < lenBulk; i++ {
 		doc := <-BuckDoc
+		if doc.Content.GetLogLine() > phpLine {
+			phpLine = doc.Content.GetLogLine()
+		}
 		if doc.Content.GetName() == "php" {
 			SetPhpPostLineNumber(doc.Content.GetLogLine(), false)
 		} else {
@@ -117,7 +126,7 @@ func (E *EsService) ProcessBulk() []string {
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
 		An.TimePostEnd = doc.Content.GetTimestamp()
 	}
-	return bulkContent
+	return phpLine, bulkContent
 }
 
 //发送失败重新放回发送队列
@@ -151,7 +160,7 @@ func (E *EsService) SaveDocToBulk(content []string) {
 }
 
 //发送批量数据
-func (E *EsService) BuckPost(content []string) bool {
+func (E *EsService) BuckPost(phpLine int64, content []string) bool {
 	postData := strings.Join(content, "\n") + "\n"
 	url := "http://"+E.GetHost()+"/_bulk"
 	str, err := E.PostData(url, postData)
@@ -166,6 +175,7 @@ func (E *EsService) BuckPost(content []string) bool {
 		An.JobSuccess += int64(len(content) / 2)
 		An.TimeEnd = time.Now().Unix()
 		Lock.Unlock()
+		SetPhpPostLineNumber(phpLine, false)
 		L.Debug("发送成功", LEVEL_DEBUG)
 		return false
 	}

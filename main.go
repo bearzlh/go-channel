@@ -33,6 +33,7 @@ func main() {
 	if service.Cf.ServerPort != "" {
 		go func() {
 			http.HandleFunc("/", service.Status)
+			http.HandleFunc("/config", service.Config)
 			http.HandleFunc("/update", service.Update)
 			http.HandleFunc("/stop", service.Stop)
 			http.HandleFunc("/restart", service.Restart)
@@ -62,6 +63,7 @@ func main() {
 			}()
 
 			if item.TimeFormat != "" {
+				service.An.TimeEnd = time.Now().Unix()
 				//定时检查是不是需要切换文件
 				go func(i int) {
 					t := time.NewTimer(time.Second * 3)
@@ -74,7 +76,7 @@ func main() {
 							if service.Tail[item.Type] != nil && service.Tail[item.Type].Filename != "" {
 								nextFile := service.GetNextFile(item, service.Tail[item.Type].Filename)
 								if nextFile != "" {
-									if time.Now().Unix()-service.An.TimeEnd > 2 {
+									if time.Now().Unix()-service.An.TimeEnd > 10 {
 										service.TailNextFile(nextFile, item)
 									}
 								}

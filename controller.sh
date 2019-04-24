@@ -19,6 +19,8 @@
 
 set -o nounset                                  # Treat unset variables as an error
 
+cd /usr/local/postlog
+
 #---   ----------------------------------------------------------------
 #          NAME:  getOs
 #   DESCRIPTION:  获取系统版本
@@ -74,7 +76,7 @@ info() {
     nickname=$1
     hostname=$2
     field=$3
-    echo -e $nickname `curl -s $hostname:8081/status | jq .${field}`
+    echo -e $nickname `curl -s "http://$hostname:8081/status" | jq .${field}`
 }
 
 #---   ----------------------------------------------------------------
@@ -88,10 +90,10 @@ update() {
     hostname=$2
     version=$3
     echo "updating $nickname..."
-    curl -s $hostname:8081/update?version=${version}
+    curl -s "http://$hostname:8081/update?version=${version}"
     for i in `seq 1 5` ; do
         sleep 1
-        curl -s $hostname:8081>/dev/null 2>&1
+        curl -s "http://$hostname:8081">/dev/null 2>&1
         if [[ "$?" == "0" ]]; then
             echo "updated successfully"
             break
@@ -112,7 +114,7 @@ stop ()
     nickname=$1
     hostname=$2
     echo "stopping $nickname..."
-    curl -s $hostname:8081/stop
+    curl -s "http://$hostname:8081/stop"
 }	# ----------  end of stop  ----------
 
 
@@ -127,9 +129,43 @@ restart ()
     nickname=$1
     hostname=$2
     echo "restarting $nickname..."
-    curl -s $hostname:8081/restart
+    curl -s "http://$hostname:8081/restart"
 
 }	# ----------  end of function restart  ----------
+
+
+config ()
+{
+    nickname=$1
+    hostname=$2
+    key=$3
+    value=$4
+    echo "update $nickname..."
+    curl -s "http://$hostname:8081/config?key=${key}&value=${value}"
+}	# ----------  end of function config  ----------
+
+
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  update_config
+#   DESCRIPTION:  配置文件更新
+#    PARAMETERS:  
+#       RETURNS:  
+#-------------------------------------------------------------------------------
+update_config ()
+{
+    key=$1
+    value=$2
+    content=`cat ./config.json`
+    echo $content | jq '.'$key'="'$value'"'
+    if [ "$?" = "0" ] ; then
+        if [ "`echo $value | grep '^[0-9]'`" != "" ]; then
+            echo $content | jq '.'$key'='$value'' > ./config.json
+        else
+            echo $content | jq '.'$key'="'$value'"' > ./config.json
+        fi
+        echo "success"
+    fi
+}	# ----------  end of function update_config  ----------
 
 case $1 in
     "info")
@@ -141,10 +177,36 @@ case $1 in
         host_action info $2 ${filter}
         ;;
     "stop")
-        host_action stop "" $2
+        if [ "$#" = "2" ]; then
+            host_action stop "" $2
+        else
+            systemcel stop postlog
+        fi
         ;;
     "restart")
-        host_action restart "" $2
+        if [ "$#" = "2" ]; then
+            host_action restart "" $2
+        else
+            systemcel restart postlog
+        fi
+        ;;
+    "config")
+        if [ "$#" = "4" ]; then
+            filter=$4
+        else
+            filter=".*"
+        fi
+        key=$2
+        value=$3
+        echo "config before"
+        host_action info cf.$key ${filter}
+        host_action config "$2 $3" ${filter}
+        sleep 1
+        echo "update after"
+        host_action info cf.$key ${filter}
+        ;;
+    "update_config")
+        update_config $2 $3
         ;;
     "update")
         if [ "$#" = "3" ]; then

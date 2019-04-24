@@ -97,10 +97,6 @@ func CheckHostHealth() {
 					L.Debug("内存使用率超过10%，进程重启", LEVEL_NOTICE)
 					RestartCmd()
 				}
-				if An.MemRate > Cf.Monitor.MemStop {
-					L.Debug("内存使用率超过20%，进程关闭", LEVEL_ALERT)
-					StopCmd()
-				}
 			case <-TimeThirty.C:
 				TimeThirty.Reset(time.Second * time.Duration(Cf.Monitor.PickInterval))
 				msg := new(object.WorkerMsg)

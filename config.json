@@ -20,7 +20,7 @@
       "index": "log-nginx-test"
     }
   ],
-  "env": "test",
+  "env": "dev",
   "log": {
     "path": "log",
     "level": "debug",
@@ -51,5 +51,5 @@
     "host": "192.168.0.109:9200",
     "index_format": "Y.m.d"
   },
-  "version": "0.9"
+  "version": "0.11"
 }
