@@ -1,9 +1,5 @@
 package object
 
-import (
-	"workerChannel/helper"
-)
-
 type PhpMsg struct {
 	AppId       string `json:"appid"`
 	WechatAppId string `json:"wechatappid"`
@@ -76,13 +72,14 @@ func (p PhpMsg) GetLogType() string {
 }
 
 //获取当前索引对象
-func (p PhpMsg) GetIndexObj(env string, time int64) Index {
-	return Index{IndexName: IndexContent{env + "-php-" + helper.TimeFormat("Ymd", time), "go"}}
+func (p PhpMsg) GetIndexObj(env string, format string, time int64) Index {
+	return Index{IndexName: IndexContent{GetIndex(env, format, time, "php"), "go"}}
 }
 
 //获取索引
-func (p PhpMsg) GetIndex(env string, time int64) string {
-	return env + "-php-" + helper.TimeFormat("Ymd", time) + "/go"
+func (p PhpMsg) GetIndex(env string, format string, time int64) string {
+	index := GetIndex(env, format, time, "php")
+	return index + "/go"
 }
 
 func (p PhpMsg) GetLogLine() int64 {

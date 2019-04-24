@@ -35,15 +35,17 @@ type ConfigService struct {
 	PhpTimeWindow int64    `json:"php_time_window"`
 	AppPath       string `json:"app_path"`
 	ServerPort    string `json:"server_port"`
-	Es            struct {
-		Host string `json:"host"`
+	Es struct {
+		Host       string `json:"host"`
+		IndexFormat string `json:"index_format"`
 	} `json:"es"`
 	Monitor struct {
-		Cpu       float64 `json:"cpu"`
-		MemRestart       float64 `json:"memory_restart"`
-		MemStop       float64 `json:"memory_stop"`
-		//Load      float64 `json:"load"`
+		Cpu        float64 `json:"cpu"`
+		MemRestart float64 `json:"memory_restart"`
+		MemStop    float64 `json:"memory_stop"`
 		SleepIntervalNs int `json:"sleep_interval_ns"`
+		PickInterval    int `json:"pick_interval"`
+		CheckInterval   int `json:"check_interval"`
 	} `json:"monitor"`
 }
 
@@ -102,9 +104,6 @@ func (C *ConfigService) loadFile() *ConfigService {
 		//ExitProgramme(os.Interrupt)
 	}
 
-	if Cf.Env == "" {
-		Cf.Env = "log"
-	}
 	return C
 }
 

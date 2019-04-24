@@ -41,12 +41,15 @@
     "cpu": 80,
     "memory_restart": 10,
     "memory_stop": 20,
-    "sleep_interval_ns": 200
+    "sleep_interval_ns": 200,
+    "pick_interval": 30,
+    "check_interval": 5
   },
   "server_port": "8081",
   "php_time_window": 2,
   "es": {
-    "host": "192.168.0.109:9200"
+    "host": "192.168.0.109:9200",
+    "index_format": "Y.m.d"
   },
-  "version": "0.8"
+  "version": "0.9"
 }

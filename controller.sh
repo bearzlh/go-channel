@@ -116,6 +116,21 @@ stop ()
 }	# ----------  end of stop  ----------
 
 
+#---  FUNCTION  ----------------------------------------------------------------
+#          NAME:  restart
+#   DESCRIPTION:  重启服务
+#    PARAMETERS:  
+#       RETURNS:  
+#-------------------------------------------------------------------------------
+restart ()
+{
+    nickname=$1
+    hostname=$2
+    echo "restarting $nickname..."
+    curl -s $hostname:8081/restart
+
+}	# ----------  end of function restart  ----------
+
 case $1 in
     "info")
         if [ "$#" = "3" ]; then
@@ -127,6 +142,9 @@ case $1 in
         ;;
     "stop")
         host_action stop "" $2
+        ;;
+    "restart")
+        host_action restart "" $2
         ;;
     "update")
         if [ "$#" = "3" ]; then

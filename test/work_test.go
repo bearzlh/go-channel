@@ -83,3 +83,7 @@ func TestSub(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	t.Log(float64(time.Now().Sub(now)))
 }
+
+func TestWorker(t *testing.T)  {
+	t.Log(object.GetIndex("", service.Cf.Es.IndexFormat, time.Now().Unix(), "php"))
+}

@@ -113,6 +113,8 @@ func ServiceInit() {
 	if service.Cf.Msg.IsBatch {
 		service.Es.BuckWatch()
 	}
+	//单条数据的发送
+	service.Es.Post()
 }
 
 //监听并处理信号，保存状态信息

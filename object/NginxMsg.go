@@ -1,9 +1,5 @@
 package object
 
-import (
-	"workerChannel/helper"
-)
-
 type NginxMsg struct {
 	AppId    string `json:"appid"`
 	HostName string `json:"hostname"`
@@ -52,10 +48,10 @@ func (Ng NginxMsg)GetLogType() string {
 	return Ng.LogType
 }
 
-func (Ng NginxMsg) GetIndex(env string, time int64) string {
-	return env + "-nginx-" + helper.TimeFormat("Ymd", time) + "/go"
+func (Ng NginxMsg) GetIndex(env string, format string, time int64) string {
+	return GetIndex(env, format, time, "nginx") + "/go"
 }
 
-func (Ng NginxMsg) GetIndexObj(env string, time int64) Index {
-	return Index{IndexName: IndexContent{env + "-nginx-" + helper.TimeFormat("Ymd", time), "go"}}
+func (Ng NginxMsg) GetIndexObj(env string, format string, time int64) Index {
+	return Index{IndexName: IndexContent{GetIndex(env, format, time, "nginx"), "go"}}
 }

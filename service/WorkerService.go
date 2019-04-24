@@ -20,7 +20,7 @@ import (
 )
 
 type Analysis struct {
-	LineCount int64 `json:"line_count"`
+	LineCount int64   `json:"line_count"`
 	SleepTime float64 `json:"sleep_time"`
 
 	//请求统计
@@ -29,15 +29,18 @@ type Analysis struct {
 	JobProcessing int64 `json:"job_processing"`
 	JobSuccess    int64 `json:"job_success"`
 	JobErrorCount int64 `json:"job_error"`
+	BuckCount     int64 `json:"buck_count"`
 
 	//运行时间
-	TimeStart    int64  `json:"time_start"`
-	TimeStartStr string `json:"time_start_str"`
-	TimeEnd      int64  `json:"time_end"`
-	TimeEndStr   string `json:"time_end_str"`
-	TimeWork     string `json:"time_work"`
-	TimeDelay    string `json:"time_delay"`
-	TimePostEnd  int64  `json:"time_post_end"`
+	TimeStart      int64  `json:"time_start"`
+	TimeStartStr   string `json:"time_start_str"`
+	TimeEnd        int64  `json:"time_end"`
+	TimeEndStr     string `json:"time_end_str"`
+	TimeWork       string `json:"time_work"`
+	TimeDelay      int64  `json:"time_delay"`
+	TimeDelayStr   string `json:"time_delay_str"`
+	TimePostEnd    int64  `json:"time_post_end"`
+	TimePostEndStr string `json:"time_post_end_str"`
 
 	HeapMemoryUsed uint64  `json:"memory_used_M"`
 	SysMemoryUsed  uint64  `json:"sys_memory_used_M"`
@@ -55,17 +58,17 @@ type Analysis struct {
 }
 
 type Worker struct {
-	ID        string    `json:"id"`
-	IsWorking bool      `json:"is_working"`
-	IsQuit    bool `json:"is_quit"`
+	ID        string `json:"id"`
+	IsWorking bool   `json:"is_working"`
+	IsQuit    bool   `json:"is_quit"`
 }
 
 type workerPool struct {
 	WorkerList []*Worker
 }
 
-type LineItem struct{
-	Type string `json:"type"`
+type LineItem struct {
+	Type string   `json:"type"`
 	List []string `json:"list"`
 }
 
@@ -83,11 +86,13 @@ var HostHealth bool
 
 func CheckHostHealth() {
 	go func() {
+		TimeFive := time.NewTimer(time.Second * time.Duration(Cf.Monitor.CheckInterval))
+		TimeThirty := time.NewTimer(time.Second * time.Duration(Cf.Monitor.PickInterval))
 		for {
 			select {
-			case <-time.After(time.Second * 1):
-				An.CpuRate = GetCpu()
-				An.MemRate = GetMem()
+			case <-TimeFive.C:
+				TimeFive.Reset(time.Second * time.Duration(Cf.Monitor.CheckInterval))
+				GetAnalysis(true)
 				if An.MemRate > Cf.Monitor.MemRestart {
 					L.Debug("内存使用率超过10%，进程重启", LEVEL_NOTICE)
 					RestartCmd()
@@ -95,6 +100,19 @@ func CheckHostHealth() {
 				if An.MemRate > Cf.Monitor.MemStop {
 					L.Debug("内存使用率超过20%，进程关闭", LEVEL_ALERT)
 					StopCmd()
+				}
+			case <-TimeThirty.C:
+				TimeThirty.Reset(time.Second * time.Duration(Cf.Monitor.PickInterval))
+				msg := new(object.WorkerMsg)
+				err := json.Unmarshal([]byte(MsgToJson(An)), msg)
+				if err != nil {
+					L.Debug("解析失败"+err.Error(), LEVEL_ERROR)
+				} else {
+					msg.HostName, _ = os.Hostname()
+					msg.AppId = GetAppIdFromHostName(msg.HostName)
+					msg.Date = time.Now().Unix()
+					L.Debug("发送统计数据", LEVEL_INFO)
+					Es.PostAdd(msg)
 				}
 			}
 		}
@@ -105,7 +123,7 @@ func CheckHostHealth() {
 func (w *Worker) handleJob(jobId string) {
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	var JobError int64 = 0
-	if item, ok := GetMap(jobId);ok {
+	if item, ok := GetMap(jobId); ok {
 		if item.Type == "php" {
 			Msg := object.PhpMsg{}
 			GetPhpMsg(item.List, &Msg)
@@ -137,7 +155,7 @@ func (w *Worker) handleJob(jobId string) {
 		An.JobProcessing--
 		Lock.Unlock()
 		DelMap(jobId)
-	}else{
+	} else {
 		L.Debug("job error,for id=>"+jobId, LEVEL_INFO)
 	}
 }
@@ -215,7 +233,7 @@ func SetWorker(n int) {
 
 //执行下一个文件
 func TailNextFile(FileName string, Rp ReadPath) {
-	L.Debug("check " + Rp.Type, LEVEL_NOTICE)
+	L.Debug("check "+Rp.Type, LEVEL_NOTICE)
 	f := PhpProcessLine
 	switch Rp.Type {
 	case "php":
@@ -289,7 +307,7 @@ func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
 }
 
 func GetLogFile(logType ReadPath, time int64) string {
-	return helper.GetPathJoin(logType.Dir, helper.TimeFormat(logType.TimeFormat, time) + logType.Suffix)
+	return helper.GetPathJoin(logType.Dir, helper.TimeFormat(logType.TimeFormat, time)+logType.Suffix)
 }
 
 func GetMap(id string) (LineItem, bool) {
@@ -317,7 +335,7 @@ func DelMap(id string) {
 }
 
 //转化为json格式
-func MsgToJson(msg object.MsgInterface) string {
+func MsgToJson(msg interface{}) string {
 	jsonContent, _ := json.Marshal(msg)
 	return string(jsonContent)
 }
@@ -379,6 +397,7 @@ func GetAnalysis(host bool) []byte {
 	}
 
 	An.JobQueue = len(JobQueue)
+	An.BuckCount = int64(len(BuckDoc))
 	An.TimeStartStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeStart)
 	An.TimeEndStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeEnd)
 	if An.TimeEnd > 0 {
@@ -400,7 +419,9 @@ func GetAnalysis(host bool) []byte {
 
 	An.HostHealth = HostHealth
 	An.Cf = Cf
-	An.TimeDelay = helper.FormatTime(time.Now().Unix() - An.TimePostEnd)
+	An.TimeDelay = time.Now().Unix() - An.TimePostEnd
+	An.TimeDelayStr = helper.FormatTime(An.TimeDelay)
+	An.TimePostEndStr = helper.TimeFormat("Y-m-d H:i:s", An.TimePostEnd)
 
 	jsonData, err := json.Marshal(An)
 	if err != nil {

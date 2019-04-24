@@ -42,8 +42,6 @@ func PhpProcessLine(Rp ReadPath) {
 		now := time.Now()
 		phpLine := IncreasePhpLineNumber()
 		Lock.Lock()
-		An.TimeEnd = time.Now().Unix()
-		An.TimeWork = helper.FormatTime(An.TimeEnd - An.TimeStart)
 		An.LineCount++
 		Lock.Unlock()
 		text := fmt.Sprintf("[%d] "+line.Text, phpLine)

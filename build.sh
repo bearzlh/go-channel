@@ -7,6 +7,7 @@ es_host_port=192.168.0.109:9200
 php_log_dir=/var/log/cpslog/
 deploy_dir=/usr/local/
 version=`cat config.tpl | jq ".version" | sed 's/"//g'`
+
 rm -rf $dir
 mkdir -p $dir
 
@@ -43,7 +44,7 @@ fi
 
 upx $dir/$out > /dev/null
 
-cat ./config.tpl | sed "s#php_log_dir#$php_log_dir#"|sed "s#es_host_port#$es_host_port#"|jq '{read_path:[.read_path[0]],log,factory,msg,server_port,php_time_window,es,monitor,version}' > $dir/config.json
+cat ./config.tpl | sed "s#php_log_dir#$php_log_dir#"|sed "s#es_host_port#$es_host_port#"|jq '{read_path:[.read_path[0]],log,factory,msg,server_port,php_time_window,es,monitor,version,env}' > $dir/config.json
 
 cp host_info.sh $dir
 cp postlog.service $dir
