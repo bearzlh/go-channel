@@ -34,7 +34,7 @@
   },
   "msg": {
     "is_batch": true,
-    "batch_size": 200,
+    "batch_size": 100,
     "batch_time_second": 3,
     "send_type": "es"
   },
@@ -49,8 +49,11 @@
   "php_time_window": 2,
   "es": {
     "host": "192.168.0.109:9200",
-    "index_format": "Y.m.d"
+    "index_format": "Y.m.d",
+    "retry": 5,
+    "concurrent_post": 20,
+    "Storage": "storage"
   },
-  "version": "0.12",
+  "version": "0.13",
   "appid": ""
 }

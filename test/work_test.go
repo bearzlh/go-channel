@@ -85,3 +85,15 @@ func TestSub(t *testing.T) {
 func TestWorker(t *testing.T)  {
 	t.Log(object.GetIndex("", service.Cf.Es.IndexFormat, time.Now().Unix(), "php"))
 }
+
+func TestStorage(t *testing.T) {
+	service.Es.SaveToStorage("aa")
+}
+
+func TestStorageSend(t *testing.T) {
+	service.InitWorkPool()
+	service.Es.SendStorageToEs()
+	select {
+
+	}
+}

@@ -1,15 +1,19 @@
 package service
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/bitly/go-simplejson"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+	"workerChannel/helper"
 	"workerChannel/object"
 )
 
@@ -23,19 +27,40 @@ var PostDoc = make(chan object.MsgInterface, 10000)
 var BuckFull = make(chan bool, 1)
 var BuckClose = make(chan bool, 1)
 var EsCanUse = make(chan bool, 1)
+var Storage = make(chan bool, 1)
+var ConcurrentPost chan int
+var ThreadLimit chan int
+
+func (E *EsService) Init() {
+	//es是否可用
+	E.CheckEsCanAccess()
+	//单条数据发送
+	E.Post()
+	//检测暂存
+	E.CheckStorage()
+	//检测批量发送队列
+	if Cf.Msg.IsBatch {
+		Es.BuckWatch()
+	}
+	ConcurrentPost = make(chan int, Cf.Es.ConcurrentPost)
+	ThreadLimit = make(chan int, 100)
+}
 
 func (E *EsService) CheckEsCanAccess() {
 	go func() {
-		t := time.NewTimer(time.Second * 1)
+		t := time.NewTimer(time.Second * 2)
 		for {
 			select {
 			case <-t.C:
-				t.Reset(time.Second * 1)
+				t.Reset(time.Second * 2)
 				_, err := E.GetData("http://" + E.GetHost())
 				if err == nil {
 					if len(EsCanUse) == 1 {
 						L.Debug("es api recover", LEVEL_NOTICE)
 						<-EsCanUse
+					}
+					if len(Storage) == 0 {
+						Storage <- true
 					}
 				} else {
 					if len(EsCanUse) == 0 {
@@ -65,30 +90,22 @@ func (E *EsService) BuckWatch() {
 				break
 			case <-t.C:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
-				if len(EsCanUse) == 0 {
-					if len(BuckDoc) > 0 {
-						L.Debug("timeout to post", LEVEL_NOTICE)
-						phpLine, content := E.ProcessBulk()
-						go func() {
-							Es.BuckPost(phpLine, content)
-						}()
-					} else {
-						L.Debug("timeout to post, nodata", LEVEL_DEBUG)
-					}
+				if len(BuckDoc) > 0 {
+					L.Debug("time up to post", LEVEL_NOTICE)
+					phpLine, content, jobs := E.ProcessBulk()
+					go func() {
+						Es.BuckPost(phpLine, content, jobs)
+					}()
 				} else {
-					if len(BuckDoc) > 0 {
-						L.Debug("timeout to post, waiting", LEVEL_NOTICE)
-					} else {
-						L.Debug("timeout to post, nodata", LEVEL_DEBUG)
-					}
+					L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 				}
 			case <-BuckFull:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
 					L.Debug("size over to post", LEVEL_NOTICE)
-					phpLine, content := E.ProcessBulk()
+					phpLine, content, jobs := E.ProcessBulk()
 					go func() {
-						Es.BuckPost(phpLine, content)
+						Es.BuckPost(phpLine, content, jobs)
 					}()
 				}
 
@@ -97,22 +114,130 @@ func (E *EsService) BuckWatch() {
 	}()
 }
 
+//检测暂存
+func (E *EsService) CheckStorage() {
+	go func() {
+		for {
+			select {
+			case <-Storage:
+				fileName := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, "data")
+				if !helper.IsFile(fileName) {
+					continue
+				}
+				f, err := os.Open(fileName)
+				if err != nil {
+					L.Debug(fileName+err.Error(), LEVEL_INFO)
+					continue
+				}
+
+				rd := bufio.NewReader(f)
+				dataPost := make([]string, 0)
+				count := 0
+				L.Debug("send loop start", LEVEL_INFO)
+				//并发线程限制
+				threadOver := make(chan int, 1)
+				for {
+					line, err := rd.ReadString('\n')
+					if line != "" {
+						count++
+						dataPost = append(dataPost, line)
+					}
+					if count%2 == 0 {
+						if len(dataPost) == Cf.Msg.BatchSize*2 {
+							postData := strings.Join(dataPost, "")
+							dataPost = make([]string, Cf.Msg.BatchSize*2)
+							ThreadLimit<-1
+							go func() {
+								_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
+								if err != nil {
+									L.Debug("暂存数据存储错误"+err.Error(), LEVEL_ERROR)
+									E.SaveToStorage(postData)
+								}
+								<-ThreadLimit
+								if len(ThreadLimit) == 0 {
+									threadOver<-1
+								}
+							}()
+						}
+						if err != nil || io.EOF == err {
+							if len(dataPost) > 0 {
+								postData := strings.Join(dataPost, "")
+								ThreadLimit<-1
+								go func() {
+									_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
+									if err != nil {
+										L.Debug("暂存数据存储错误"+err.Error(), LEVEL_ERROR)
+										E.SaveToStorage(postData)
+									}
+									<-ThreadLimit
+									if len(ThreadLimit) == 0 {
+										threadOver<-1
+									}
+								}()
+							}
+							break
+						}
+					}
+				}
+				L.Debug(fmt.Sprintf("send loop end, 发送数据量:%d", count/2), LEVEL_INFO)
+				select {
+				case <-threadOver:
+					err := f.Close()
+					if err != nil {
+						L.Debug("文件关闭失败"+f.Name()+err.Error(), LEVEL_ERROR)
+					}
+					errRemove := os.Remove(fileName)
+					if errRemove != nil {
+						L.Debug("文件删除失败"+fileName, LEVEL_ERROR)
+					}
+					back := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, "back")
+					if helper.IsFile(back) {
+						errRename := os.Rename(back, fileName)
+						if errRename != nil {
+							L.Debug("文件重命名失败,from:"+back+" to:"+fileName, LEVEL_ERROR)
+						}
+					}
+				}
+			}
+		}
+	}()
+}
+
+func (E *EsService)SaveToStorage(content string) {
+	dir := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage)
+	if !helper.IsDir(dir) {
+		err := helper.Mkdir(dir)
+		if err != nil {
+			L.Debug("目录无法创建"+err.Error(), LEVEL_ALERT)
+			return
+		}
+	}
+
+	name := "data"
+	if len(ThreadLimit) > 0 {
+		name = "back"
+	}
+	fileName := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, name)
+	L.WriteAppend(fileName, content)
+}
+
 //添加数据
 func (E *EsService) BuckAdd(msg object.MsgInterface) {
 	BuckDoc <- object.Doc{Index: msg.GetIndexObj(Cf.Env, Cf.Es.IndexFormat, msg.GetTimestamp()), Content: msg}
-	if len(BuckDoc) > Cf.Msg.BatchSize && len(EsCanUse) == 0 {
+	if len(BuckDoc) > Cf.Msg.BatchSize {
 		BuckFull <- true
 	}
 }
 
 //组装批量数据
-func (E *EsService) ProcessBulk() (int64, []string) {
+func (E *EsService) ProcessBulk() (int64, string, string) {
 	bulkContent := make([]string, 0)
 	lenBulk := Cf.Msg.BatchSize
 	if len(BuckDoc) < Cf.Msg.BatchSize {
 		lenBulk = len(BuckDoc)
 	}
 	phpLine := int64(0)
+	jobs := make([]string, lenBulk)
 	for i := 0; i < lenBulk; i++ {
 		doc := <-BuckDoc
 		if doc.Content.GetLogLine() > phpLine {
@@ -122,55 +247,45 @@ func (E *EsService) ProcessBulk() (int64, []string) {
 		Content, _ := json.Marshal(doc.Content)
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
 		An.TimePostEnd = doc.Content.GetTimestamp()
+		jobs[i] = doc.Content.GetJobId()
 	}
 	L.Debug(fmt.Sprintf("组装数据,%d,%d", phpLine, len(bulkContent)), LEVEL_INFO)
-	return phpLine, bulkContent
+	return phpLine, strings.Join(bulkContent, "\n") + "\n", strings.Join(jobs, ",")
 }
 
-//发送失败重新放回发送队列
-func (E *EsService) SaveDocToBulk(content []string) {
-	for index := 0; index < len(content); index += 2 {
-		BD := object.Doc{}
-		err := json.Unmarshal([]byte(content[index]), &BD.Index)
-		if err != nil {
-			L.Debug("index process err"+err.Error(), LEVEL_ERROR)
-			continue
-		}
-		if strings.Contains(BD.Index.IndexName.Index, "php") {
-			msg := object.PhpMsg{}
-			err1 := json.Unmarshal([]byte(content[index+1]), &msg)
-			if err1 != nil {
-				L.Debug("index process err"+err1.Error(), LEVEL_ERROR)
-				continue
-			}
-			BD.Content = msg
-		} else {
-			msg := object.NginxMsg{}
-			err1 := json.Unmarshal([]byte(content[index+1]), &msg)
-			if err1 != nil {
-				L.Debug("content process err"+err1.Error(), LEVEL_ERROR)
-				continue
-			}
-			BD.Content = msg
-		}
-		BuckDoc <- BD
-	}
+//php数据暂存
+func (E *EsService)PhpDataSave(phpLine int64, content string)  {
+	E.SaveToStorage(content)
+	Lock.Lock()
+	An.TimeEnd = time.Now().Unix()
+	Lock.Unlock()
+	SetPhpPostLineNumber(phpLine, false)
 }
 
 //发送批量数据
-func (E *EsService) BuckPost(phpLine int64, content []string) bool {
+func (E *EsService) BuckPost(phpLine int64, content string, jobs string) bool {
 	if !Cf.Factory.On {
 		L.Debug(fmt.Sprintf("暂停数据发送,%d", phpLine), LEVEL_INFO)
+		E.PhpDataSave(phpLine, content)
 		return false
 	}
-	postData := strings.Join(content, "\n") + "\n"
+	if len(EsCanUse) > 0 {
+		L.Debug(fmt.Sprintf("es不可用，进行暂存，%d", phpLine), LEVEL_INFO)
+		E.PhpDataSave(phpLine, content)
+		return false
+	}
 	url := "http://"+E.GetHost()+"/_bulk"
-	str, err := E.PostData(url, postData)
+	str, err := E.PostData(url, content)
+	if err != nil {
+		L.Debug(fmt.Sprintf("es发送错误，进行暂存，%d", phpLine), LEVEL_INFO)
+		E.PhpDataSave(phpLine, content)
+		return false
+	}
 	jsonData, _ := simplejson.NewJson([]byte(str))
 	errors, err := jsonData.Get("data").Get("errors").Bool()
 	if errors {
-		E.SaveDocToBulk(content)
-		L.Debug(string(str)+err.Error(), LEVEL_ERROR)
+		L.Debug(fmt.Sprintf("es返回值错误，进行暂存，%d"+err.Error(), phpLine), LEVEL_INFO)
+		E.PhpDataSave(phpLine, content)
 		return errors
 	} else {
 		Lock.Lock()
@@ -178,8 +293,8 @@ func (E *EsService) BuckPost(phpLine int64, content []string) bool {
 		An.TimeEnd = time.Now().Unix()
 		Lock.Unlock()
 		SetPhpPostLineNumber(phpLine, false)
-		L.Debug(fmt.Sprintf("发送成功,%d", phpLine), LEVEL_INFO)
-		L.Debug(postData, LEVEL_DEBUG)
+		L.Debug(fmt.Sprintf("发送成功,%d,jobs-->"+jobs, phpLine), LEVEL_INFO)
+		L.Debug(content, LEVEL_DEBUG)
 		return false
 	}
 }
@@ -192,28 +307,30 @@ func (E *EsService) PostAdd(msg object.MsgInterface) {
 func (E *EsService) Post() {
 	go func() {
 		for {
-			if len(EsCanUse) == 1 {
-				L.Debug("es cannot use, wait", LEVEL_INFO)
-				time.Sleep(time.Second * 5)
-				continue
-			}
 			select {
 			case msg := <-PostDoc:
 				content, _ := json.Marshal(msg)
-				url := "http://" + E.GetHost() + "/" + msg.GetIndex(Cf.Env, Cf.Es.IndexFormat, msg.GetTimestamp())
+				index := msg.GetIndexObj(Cf.Env, Cf.Es.IndexFormat, msg.GetTimestamp())
+				url := "http://" + E.GetHost() + "/" + index.IndexName.Index + "/" + index.IndexName.Type
 				data := string(content)
+				if len(EsCanUse) == 1 {
+					L.Debug("es cannot use, wait", LEVEL_INFO)
+					indexContent, _ := json.Marshal(index)
+					E.SaveToStorage(string(indexContent) + "\n" + data + "\n")
+					continue
+				}
 				L.Debug(url+data, LEVEL_DEBUG)
 				str, err := E.PostData(url, data)
+				if err != nil {
+					L.Debug("es发送错误，进行暂存"+err.Error(), LEVEL_ERROR)
+					E.PostAdd(msg)
+					continue
+				}
 				jsonData, _ := simplejson.NewJson([]byte(str))
 				success, err := jsonData.Get("_shards").Get("successful").Int()
 				if success == 0 {
+					L.Debug("es返回值错误，进行暂存"+err.Error(), LEVEL_ERROR)
 					E.PostAdd(msg)
-					L.Debug(string(str)+err.Error(), LEVEL_ERROR)
-				} else {
-					Lock.Lock()
-					An.JobSuccess += 1
-					An.TimeEnd = time.Now().Unix()
-					Lock.Unlock()
 				}
 			}
 		}
@@ -228,9 +345,23 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 	client := http.Client{
 		Transport: &transport,
 	}
+	ConcurrentPost<-0
 	res, err := client.Post(url, "application/json", strings.NewReader(string(content)))
+	<-ConcurrentPost
 	if err != nil {
-		return "", err
+		L.Debug("post error"+err.Error(), LEVEL_ERROR)
+		return "请求错误", err
+	}
+	for i := 0; i < Cf.Es.Retry; i++ {
+		if res.StatusCode == 200 || res.StatusCode == 201 {
+			break
+		} else {
+			byteC, _ := ioutil.ReadAll(res.Body)
+			L.Debug("post error"+string(byteC)+"<--->data:"+string(content), LEVEL_ERROR)
+		}
+		ConcurrentPost<-0
+		res, _ = client.Post(url, "application/json", strings.NewReader(string(content)))
+		<-ConcurrentPost
 	}
 	byteStr, err := ioutil.ReadAll(res.Body)
 	return string(byteStr), err

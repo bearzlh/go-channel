@@ -303,7 +303,7 @@ func ParseUrl(urlStr string) (*url.URL, error) {
 	if err != nil {
 		L.Debug("url parse error"+err.Error()+",url:"+urlStr, LEVEL_ERROR)
 		if strings.Contains(urlStr, "%!") {
-			L.Debug("url parse save"+",url:"+urlStr, LEVEL_DEBUG)
+			L.Debug("url parse save"+",url:"+urlStr, LEVEL_INFO)
 			urlSplit := strings.Split(urlStr, "%!")
 			return ParseUrl(urlSplit[0])
 		}

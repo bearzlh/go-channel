@@ -41,20 +41,13 @@ func ServiceInit() {
 	service.SetAnalysis()
 
 	//检测es是否可用
-	service.Es.CheckEsCanAccess()
+	service.Es.Init()
 
 	//工作初始化
 	service.InitWorkPool()
 
 	//配置文件监控
 	service.Cf.ConfigWatch()
-
-	//检测批量发送队列
-	if service.Cf.Msg.IsBatch {
-		service.Es.BuckWatch()
-	}
-	//单条数据的发送
-	service.Es.Post()
 
 	//启动http服务
 	service.StartHttp()

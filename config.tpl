@@ -46,9 +46,12 @@
   "php_time_window": 2,
   "es": {
     "host": "es_host_port",//es连接地址
-    "index_format": "Y.m.d" //索引时间格式
+    "index_format": "Y.m.d", //索引时间格式
+    "retry": 10, //es重试
+    "concurrent_post": 20,//并发发送es请求的次数
+    "Storage": "storage" //es暂存目录
   },
-  "version": "0.12",//脚本版本
+  "version": "0.13",//脚本版本
   "env": "log", //用作es索引前缀，如果非空将使用-与时间分隔
   "appid": "" //appid字段，区分平台，默认使用主机名字符串
 }

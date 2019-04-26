@@ -38,8 +38,11 @@ type ConfigService struct {
 	AppPath       string `json:"app_path"`
 	ServerPort    string `json:"server_port"`
 	Es struct {
-		Host       string `json:"host"`
-		IndexFormat string `json:"index_format"`
+		Host           string `json:"host"`
+		IndexFormat    string `json:"index_format"`
+		Storage        string `json:"storage"`
+		Retry          int    `json:"retry"`
+		ConcurrentPost int    `json:"concurrent_post"`
 	} `json:"es"`
 	Monitor struct {
 		Cpu        float64 `json:"cpu"`

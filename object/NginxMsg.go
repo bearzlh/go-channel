@@ -55,3 +55,7 @@ func (Ng NginxMsg) GetIndex(env string, format string, time int64) string {
 func (Ng NginxMsg) GetIndexObj(env string, format string, time int64) Index {
 	return Index{IndexName: IndexContent{GetIndex(env, format, time, "nginx"), "go"}}
 }
+
+func (Ng NginxMsg)GetJobId() string {
+	return Ng.Timestamp
+}

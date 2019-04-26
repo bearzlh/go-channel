@@ -71,3 +71,7 @@ func (p WorkerMsg) GetIndex(env string, format string, time int64) string {
 func (p WorkerMsg) GetLogLine() int64 {
 	return 0
 }
+
+func (p WorkerMsg)GetJobId() string {
+	return p.TimePostEndStr
+}

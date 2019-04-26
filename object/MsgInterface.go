@@ -24,6 +24,7 @@ type MsgInterface interface {
 	GetIndex(string, string, int64) string
 	GetIndexObj(string, string, int64) Index
 	GetName() string
+	GetJobId() string
 }
 
 func GetIndex(env string, format string, time int64, flag string) string {

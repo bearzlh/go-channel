@@ -30,6 +30,7 @@ type Analysis struct {
 	JobSuccess    int64 `json:"job_success"`
 	JobErrorCount int64 `json:"job_error"`
 	BuckCount     int64 `json:"buck_count"`
+	PostCurrent   int `json:"post_current"`
 
 	//运行时间
 	TimeStart      int64  `json:"time_start"`
@@ -469,6 +470,7 @@ func GetAnalysis(host bool) []byte {
 	}
 
 	An.JobQueue = len(JobQueue)
+	An.PostCurrent = len(ConcurrentPost)
 	An.BuckCount = int64(len(BuckDoc))
 	An.TimeStartStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeStart)
 	An.TimeEndStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeEnd)
