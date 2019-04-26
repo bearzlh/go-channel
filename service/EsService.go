@@ -109,17 +109,11 @@ func (E *EsService) ProcessBulk() (int64, []string) {
 	if len(BuckDoc) < Cf.Msg.BatchSize {
 		lenBulk = len(BuckDoc)
 	}
-
 	phpLine := int64(0)
 	for i := 0; i < lenBulk; i++ {
 		doc := <-BuckDoc
 		if doc.Content.GetLogLine() > phpLine {
 			phpLine = doc.Content.GetLogLine()
-		}
-		if doc.Content.GetName() == "php" {
-			SetPhpPostLineNumber(doc.Content.GetLogLine(), false)
-		} else {
-			SetNginxPostLineNumber(doc.Content.GetLogLine(), false)
 		}
 		indexContent, _ := json.Marshal(doc.Index)
 		Content, _ := json.Marshal(doc.Content)
@@ -176,7 +170,7 @@ func (E *EsService) BuckPost(phpLine int64, content []string) bool {
 		An.TimeEnd = time.Now().Unix()
 		Lock.Unlock()
 		SetPhpPostLineNumber(phpLine, false)
-		L.Debug("发送成功", LEVEL_DEBUG)
+		L.Debug("发送成功--->"+postData, LEVEL_DEBUG)
 		return false
 	}
 }

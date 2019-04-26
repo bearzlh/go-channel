@@ -45,7 +45,7 @@ if [[ "$?" != "0" ]]; then
     if [[ "$os" = "Mac" ]]; then
         brew install jq
     else
-        yum -y install jq
+        wget http://dev104.qcread.cn/jq && chmod +x jq && mv ./jq /usr/bin/
     fi
 fi
 
@@ -180,14 +180,14 @@ case $1 in
         if [ "$#" = "2" ]; then
             host_action stop "" $2
         else
-            systemcel stop postlog
+            systemctl stop postlog
         fi
         ;;
     "restart")
         if [ "$#" = "2" ]; then
             host_action restart "" $2
         else
-            systemcel restart postlog
+            systemctl restart postlog
         fi
         ;;
     "config")

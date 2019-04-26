@@ -31,13 +31,14 @@
   "msg": {
     "is_batch": true,//批量发送
     "batch_size": 200,//批量发送限额
-    "batch_time_second": 2,//发送时间窗口
+    "batch_time_second": 3,//发送时间窗口
     "send_type": "es"
   },
   "monitor": {
-    "cpu": 150,//cpu限制
-    "sleep_interval_ns": 200,//cpu限制参数
-    "memory_restart": 15,//内存使用率超过此值将重启脚本
+    "cpu": 200,//cpu限制
+    "sleep_interval_ns": 100,//cpu限制参数
+    "memory_restart": 10,//内存使用率超过此值将重启脚本
+    "memory_stop": 20,//内存使用率超过此值将停止脚本
     "pick_interval": 15,//统计信息收集到es中的间隔
     "check_interval": 5 //统计信息检查间隔
   },
