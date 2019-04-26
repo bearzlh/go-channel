@@ -15,6 +15,7 @@ const Split = "/"
 type ConfigService struct {
 	ReadPath []ReadPath `json:"read_path"`
 	Env      string     `json:"env"`
+	AppId    string     `json:"appid"`
 	Version  string     `json:"version"`
 	Log      struct {
 		Path       string `json:"path"`
@@ -23,8 +24,9 @@ type ConfigService struct {
 		Format     string `json:"format"`
 	} `json:"log"`
 	Factory struct {
-		WorkerMax  int `json:"worker_max"`
-		WorkerInit int `json:"worker_init"`
+		WorkerMax  int  `json:"worker_max"`
+		WorkerInit int  `json:"worker_init"`
+		On         bool `json:"on"`
 	} `json:"factory"`
 	Msg struct {
 		IsBatch         bool   `json:"is_batch"`
@@ -126,17 +128,28 @@ func (C *ConfigService) ConfigWatch() {
 				L.outPut("reload config file")
 				workCount := Cf.Factory.WorkerInit
 				buckStatus := Cf.Msg.IsBatch
+				onStatus := Cf.Factory.On
 				C.loadFile()
 				err = watch.Add(configFile)
 				if err != nil {
 					L.outPut(err.Error())
 				}
+
 				if workCount != Cf.Factory.WorkerInit {
 					if Cf.Factory.WorkerInit > Cf.Factory.WorkerMax {
 						Cf.Factory.WorkerInit = Cf.Factory.WorkerMax
 					}
 					SetWorker(Cf.Factory.WorkerInit)
 				}
+
+				if onStatus != Cf.Factory.On {
+					if Cf.Factory.On {
+						StartWork()
+					} else {
+						StopWork()
+					}
+				}
+
 				//切换批量发送状态
 				if buckStatus != Cf.Msg.IsBatch {
 					if Cf.Msg.IsBatch {

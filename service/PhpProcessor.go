@@ -29,6 +29,7 @@ const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\w+)* gro
 var readPath ReadPath
 
 func PhpProcessLine(Rp ReadPath) {
+	L.Debug("日志收集开始", LEVEL_NOTICE)
 	readPath = Rp
 	var currentId string
 	tail := Tail[Rp.Type]
@@ -49,6 +50,10 @@ func PhpProcessLine(Rp ReadPath) {
 		currentId = PhpLineToJob(text, Rp.Type, currentId)
 		LineCount++
 		LineTime += float64(time.Now().Sub(now))
+		if !Cf.Factory.On {
+			L.Debug("日志收集暂停", LEVEL_NOTICE)
+			break
+		}
 	}
 }
 
@@ -245,10 +250,14 @@ func QueryProcess(values url.Values, msg *object.PhpMsg) {
 
 //获取主机id
 func GetAppIdFromHostName(HostName string) string {
-	msg := []byte(HostName)
-	reg := regexp.MustCompile(`[[:alpha:]]+`)
-	s := reg.Find(msg)
-	return string(s)
+	if Cf.AppId != "" {
+		return Cf.AppId
+	} else {
+		msg := []byte(HostName)
+		reg := regexp.MustCompile(`[[:alpha:]]+`)
+		s := reg.Find(msg)
+		return string(s)
+	}
 }
 
 func GetPositionFile(logType string) string {

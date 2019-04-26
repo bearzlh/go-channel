@@ -53,5 +53,5 @@ func TestAn(t *testing.T) {
 }
 
 func TestHost(t *testing.T) {
-	t.Log(service.Es.GetHost())
+	t.Log(service.Cf.AppId)
 }

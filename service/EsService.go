@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/bitly/go-simplejson"
 	"io/ioutil"
 	"math/rand"
@@ -59,13 +60,17 @@ func (E *EsService) BuckWatch() {
 		t := time.NewTimer(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 		for {
 			select {
+			case <-BuckClose:
+				L.Debug("config changed, BuckClosed", LEVEL_NOTICE)
+				break
 			case <-t.C:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(EsCanUse) == 0 {
 					if len(BuckDoc) > 0 {
 						L.Debug("timeout to post", LEVEL_NOTICE)
+						phpLine, content := E.ProcessBulk()
 						go func() {
-							Es.BuckPost(E.ProcessBulk())
+							Es.BuckPost(phpLine, content)
 						}()
 					} else {
 						L.Debug("timeout to post, nodata", LEVEL_DEBUG)
@@ -77,15 +82,13 @@ func (E *EsService) BuckWatch() {
 						L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 					}
 				}
-			case <-BuckClose:
-				L.Debug("config changed, BuckClosed", LEVEL_NOTICE)
-				return
 			case <-BuckFull:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
 					L.Debug("size over to post", LEVEL_NOTICE)
+					phpLine, content := E.ProcessBulk()
 					go func() {
-						Es.BuckPost(E.ProcessBulk())
+						Es.BuckPost(phpLine, content)
 					}()
 				}
 
@@ -120,6 +123,7 @@ func (E *EsService) ProcessBulk() (int64, []string) {
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
 		An.TimePostEnd = doc.Content.GetTimestamp()
 	}
+	L.Debug(fmt.Sprintf("组装数据,%d,%d", phpLine, len(bulkContent)), LEVEL_INFO)
 	return phpLine, bulkContent
 }
 
@@ -155,6 +159,10 @@ func (E *EsService) SaveDocToBulk(content []string) {
 
 //发送批量数据
 func (E *EsService) BuckPost(phpLine int64, content []string) bool {
+	if !Cf.Factory.On {
+		L.Debug(fmt.Sprintf("暂停数据发送,%d", phpLine), LEVEL_INFO)
+		return false
+	}
 	postData := strings.Join(content, "\n") + "\n"
 	url := "http://"+E.GetHost()+"/_bulk"
 	str, err := E.PostData(url, postData)
@@ -170,7 +178,8 @@ func (E *EsService) BuckPost(phpLine int64, content []string) bool {
 		An.TimeEnd = time.Now().Unix()
 		Lock.Unlock()
 		SetPhpPostLineNumber(phpLine, false)
-		L.Debug("发送成功--->"+postData, LEVEL_DEBUG)
+		L.Debug(fmt.Sprintf("发送成功,%d", phpLine), LEVEL_INFO)
+		L.Debug(postData, LEVEL_DEBUG)
 		return false
 	}
 }

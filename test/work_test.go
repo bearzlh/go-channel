@@ -54,8 +54,6 @@ func TestPad(t *testing.T) {
 	doc.Index = object.Index{IndexName: object.IndexContent{Index: "a", Type: "b"}}
 	doc.Content = object.PhpMsg{}
 	service.BuckDoc<-doc
-	content := service.Es.ProcessBulk()
-	service.Es.SaveDocToBulk(content)
 	t.Log(<-service.BuckDoc)
 }
 

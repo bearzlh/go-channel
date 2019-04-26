@@ -56,6 +56,12 @@ if [ "$?" -ne "0" ] ; then
 fi
 
 cp -r package/* $deploy_dir/
+
+if [ "`hostname`" = "171-ncps" ]; then
+    content=`cat $deploy_dir/config.json`
+    echo $content | jq '.appid="xg"' > $deploy_dir/config.json
+fi
+
 chmod +x $deploy_dir/*.sh
 
 rm -rf package

@@ -156,10 +156,10 @@ update_config ()
     key=$1
     value=$2
     content=`cat ./config.json`
-    echo $content | jq '.'$key'="'$value'"'
+    echo $content | jq '.'$key'="'$value'"'>/dev/null
     if [ "$?" = "0" ] ; then
-        if [ "`echo $value | grep '^[0-9]'`" != "" ]; then
-            echo $content | jq '.'$key'='$value'' > ./config.json
+        if [ "`echo $value | grep -E '^[0-9]{1,10}$'`" != "" -o "$value" = "true"  -o "$value" = "false" ]; then
+            echo $content | jq '.'$key'='$value > ./config.json
         else
             echo $content | jq '.'$key'="'$value'"' > ./config.json
         fi

@@ -84,6 +84,77 @@ var StopSignal = make(chan os.Signal)
 
 var HostHealth bool
 
+//启动日志监控
+func StartWork() {
+	if Cf.Factory.On {
+		L.Debug("启动日志收集", LEVEL_NOTICE)
+		//开始监控日志变化
+		for i := 0; i < len(Cf.ReadPath); i++ {
+
+			item := Cf.ReadPath[i]
+
+			if item.On {
+				//查看当前文件
+				go func() {
+					positionObj := GetPosition(GetPositionFile(item.Type))
+					L.Debug("日志路径"+positionObj.File, LEVEL_NOTICE)
+					if positionObj.File != "" {
+						TailNextFile(positionObj.File, item)
+					} else {
+						Log := GetLogFile(item, 0)
+						TailNextFile(Log, item)
+					}
+				}()
+
+				if item.TimeFormat != "" {
+					An.TimeEnd = time.Now().Unix()
+					//定时检查是不是需要切换文件
+					go func(i int) {
+						t := time.NewTimer(time.Second * 3)
+						for {
+							//以防配置文件修改后不生效
+							item = Cf.ReadPath[i]
+							if !Cf.Factory.On {
+								L.Debug("日志切换检测停止", LEVEL_NOTICE)
+								break;
+							}
+							select {
+							case <-t.C:
+								L.Debug("日志切换检测", LEVEL_NOTICE)
+								t.Reset(time.Second * 3)
+								if Tail[item.Type] != nil && Tail[item.Type].Filename != "" {
+									nextFile := GetNextFile(item, Tail[item.Type].Filename)
+									if nextFile != "" {
+										nowStamp := time.Now().Unix()
+										formatNow := helper.TimeFormat("Y-m-d H:i:s",nowStamp)
+										formatEnd := helper.TimeFormat("Y-m-d H:i:s",An.TimeEnd)
+										if nowStamp-An.TimeEnd > int64(Cf.Msg.BatchTimeSecond+3) {
+											L.Debug("日志切换生效->"+nextFile+":"+formatNow+"-"+formatEnd, LEVEL_NOTICE)
+											TailNextFile(nextFile, item)
+										}
+									}
+								}
+							}
+						}
+					}(i)
+				}
+			}
+		}
+	} else {
+		L.Debug("未启动日志收集", LEVEL_NOTICE)
+	}
+}
+
+//停止日志读取
+func StopWork() {
+	time.Sleep(time.Second * 3)
+	SaveRunTimeStatus()
+	for key, value := range Tail {
+		StopTailFile(value)
+		delete(Tail, key)
+	}
+}
+
 func CheckHostHealth() {
 	go func() {
 		TimeFive := time.NewTimer(time.Second * time.Duration(Cf.Monitor.CheckInterval))
@@ -242,11 +313,7 @@ func TailNextFile(FileName string, Rp ReadPath) {
 	if Tail[Rp.Type] != nil && Tail[Rp.Type].Filename != "" {
 		if Tail[Rp.Type].Filename != FileName {
 			L.Debug("file changed:"+Tail[Rp.Type].Filename+"->"+FileName, LEVEL_NOTICE)
-			Tail[Rp.Type].Cleanup()
-			err := Tail[Rp.Type].Stop()
-			if err != nil {
-				L.Debug("file stop error:"+err.Error(), LEVEL_ERROR)
-			}
+			StopTailFile(Tail[Rp.Type])
 			go func() {
 				TailFile(FileName, Rp, f)
 			}()
@@ -258,6 +325,15 @@ func TailNextFile(FileName string, Rp ReadPath) {
 			L.Debug("file init->"+FileName, LEVEL_NOTICE)
 			TailFile(FileName, Rp, f)
 		}()
+	}
+}
+
+//停止日志读取
+func StopTailFile(tail *tail.Tail) {
+	L.Debug("file will stop tail:"+tail.Filename, LEVEL_NOTICE)
+	err := tail.Stop()
+	if err != nil {
+		L.Debug("file stop error:"+err.Error(), LEVEL_ERROR)
 	}
 }
 
@@ -491,4 +567,25 @@ func GetNextFile(rp ReadPath, currentFile string) string {
 
 func ExitProgramme(s os.Signal) {
 	StopSignal <- s
+}
+
+//保存状态
+func SaveRunTimeStatus() {
+	for _, rp := range Cf.ReadPath {
+		file := GetPositionFile(rp.Type)
+		oTail := Tail[rp.Type]
+		if oTail != nil {
+			var line int64
+			if rp.Type == "php" {
+				line = GetPhpPostLineNumber()
+			} else {
+				line = GetNginxPostLineNumber()
+			}
+			P := object.Position{File: oTail.Filename, Line: line}
+			L.Debug(fmt.Sprintf("runtime status save,line +%d", line), LEVEL_NOTICE)
+			SetPosition(file, P)
+		}
+	}
+
+	L.WriteOverride(helper.GetPathJoin(Cf.AppPath, ".analysis"), string(GetAnalysis(false)))
 }

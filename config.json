@@ -20,16 +20,17 @@
       "index": "log-nginx-test"
     }
   ],
-  "env": "dev",
+  "env": "test",
   "log": {
     "path": "log",
-    "level": "debug",
+    "level": "info",
     "format_type": "time",
     "format": "Ym/d_H"
   },
   "factory": {
     "worker_max": 10000,
-    "worker_init": 4
+    "worker_init": 4,
+    "on": true
   },
   "msg": {
     "is_batch": true,
@@ -40,16 +41,16 @@
   "monitor": {
     "cpu": 80,
     "memory_restart": 10,
-    "memory_stop": 20,
     "sleep_interval_ns": 200,
     "pick_interval": 30,
     "check_interval": 5
   },
-  "server_port": "8081",
+  "server_port": ":8081",
   "php_time_window": 2,
   "es": {
     "host": "192.168.0.109:9200",
     "index_format": "Y.m.d"
   },
-  "version": "0.11"
+  "version": "0.12",
+  "appid": ""
 }
