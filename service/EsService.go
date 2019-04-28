@@ -43,7 +43,7 @@ func (E *EsService) Init() {
 		Es.BuckWatch()
 	}
 	ConcurrentPost = make(chan int, Cf.Es.ConcurrentPost)
-	ThreadLimit = make(chan int, 100)
+	ThreadLimit = make(chan int, Cf.Es.RecoverThread)
 }
 
 func (E *EsService) CheckEsCanAccess() {
@@ -345,26 +345,46 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 	client := http.Client{
 		Transport: &transport,
 	}
-	ConcurrentPost<-0
-	res, err := client.Post(url, "application/json", strings.NewReader(string(content)))
-	<-ConcurrentPost
-	if err != nil {
-		L.Debug("post error"+err.Error(), LEVEL_ERROR)
-		return "请求错误", err
-	}
+	var res *http.Response
+	var err error
+	var byteC []byte
 	for i := 0; i < Cf.Es.Retry; i++ {
+		ConcurrentPost<-0
+		res, err = client.Post(url, "application/json", strings.NewReader(string(content)))
+		<-ConcurrentPost
+		if err != nil {
+			L.Debug("es请求错误，"+err.Error(), LEVEL_ERROR)
+			break
+		}
+		byteC, _ = ioutil.ReadAll(res.Body)
 		if res.StatusCode == 200 || res.StatusCode == 201 {
+			if strings.Contains(url, "_bulk") {
+				buckRes := new(object.EsBuckResponse)
+				errJson := json.Unmarshal(byteC, buckRes)
+				if errJson != nil {
+					L.Debug("json格式化错误"+errJson.Error(), LEVEL_ERROR)
+					break
+				}
+				if buckRes.Errors {
+					contentArr := strings.Split(content, "\n")
+					contentNew := make([]string, 0)
+					for index, value := range buckRes.Items {
+						if value.Index.Status != 201 {
+							L.Debug(fmt.Sprintf("返回值错误, code:%d, %s, %s", value.Index.Status, value.Index.Error.Type, value.Index.Error.Reason), LEVEL_NOTICE)
+							contentNew = append(contentNew, contentArr[index*2])
+							contentNew = append(contentNew, contentArr[index*2+1])
+						}
+					}
+					content = strings.Join(contentNew, "\n") + "\n"
+					continue
+				}
+			}
 			break
 		} else {
-			byteC, _ := ioutil.ReadAll(res.Body)
-			L.Debug("post error"+string(byteC)+"<--->data:"+string(content), LEVEL_ERROR)
+			L.Debug("post error"+string(byteC), LEVEL_ERROR)
 		}
-		ConcurrentPost<-0
-		res, _ = client.Post(url, "application/json", strings.NewReader(string(content)))
-		<-ConcurrentPost
 	}
-	byteStr, err := ioutil.ReadAll(res.Body)
-	return string(byteStr), err
+	return string(byteC), err
 }
 
 func (E *EsService) GetData(url string) (string, error) {

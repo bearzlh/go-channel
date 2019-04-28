@@ -52,8 +52,9 @@
     "index_format": "Y.m.d",
     "retry": 5,
     "concurrent_post": 20,
-    "Storage": "storage"
+    "storage": "storage",
+    "recover_thread": 50
   },
-  "version": "0.13",
+  "version": "0.14",
   "appid": ""
 }

@@ -92,7 +92,7 @@ func TestStorage(t *testing.T) {
 
 func TestStorageSend(t *testing.T) {
 	service.InitWorkPool()
-	service.Es.SendStorageToEs()
+	service.Es.CheckStorage()
 	select {
 
 	}

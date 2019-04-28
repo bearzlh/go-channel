@@ -43,6 +43,7 @@ type ConfigService struct {
 		Storage        string `json:"storage"`
 		Retry          int    `json:"retry"`
 		ConcurrentPost int    `json:"concurrent_post"`
+		RecoverThread  int    `json:"recover_thread"`
 	} `json:"es"`
 	Monitor struct {
 		Cpu        float64 `json:"cpu"`
