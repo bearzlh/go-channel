@@ -58,12 +58,11 @@ func ServiceInit() {
 
 //监听并处理信号，保存状态信息
 func SignalHandler() {
-	fmt.Println("signal watching!")
 	signal.Notify(service.StopSignal, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
 		msg := <-service.StopSignal //阻塞等待
 		//保存当前状态
-		service.L.Debug(msg.String(), service.LEVEL_DEBUG)
+		service.L.Debug("信息中断，信号信息"+msg.String(), service.LEVEL_CRITICAL)
 		service.StopWork()
 		os.Exit(0)
 	}()

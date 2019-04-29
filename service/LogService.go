@@ -83,6 +83,23 @@ func (Log *LogService) Debug(msg string, level string) {
 			errorContent := string(debug.Stack())
 			L.WriteLog(logFile, errorContent)
 		}
+		switch level {
+		case LEVEL_ERROR:
+			Lock.Lock()
+			An.CodeError++
+			Lock.Unlock()
+			break
+		case LEVEL_ALERT:
+			Lock.Lock()
+			An.CodeAlert++
+			Lock.Unlock()
+			break
+		case LEVEL_CRITICAL:
+			Lock.Lock()
+			An.CodeCritical++
+			Lock.Unlock()
+			break
+		}
 	}
 }
 

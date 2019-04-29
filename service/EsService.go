@@ -91,7 +91,7 @@ func (E *EsService) BuckWatch() {
 			case <-t.C:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
-					L.Debug("time up to post", LEVEL_NOTICE)
+					L.Debug("time up to post", LEVEL_INFO)
 					phpLine, content, jobs := E.ProcessBulk()
 					go func() {
 						Es.BuckPost(phpLine, content, jobs)
@@ -102,7 +102,7 @@ func (E *EsService) BuckWatch() {
 			case <-BuckFull:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
-					L.Debug("size over to post", LEVEL_NOTICE)
+					L.Debug("size over to post", LEVEL_INFO)
 					phpLine, content, jobs := E.ProcessBulk()
 					go func() {
 						Es.BuckPost(phpLine, content, jobs)
@@ -208,7 +208,7 @@ func (E *EsService)SaveToStorage(content string) {
 	if !helper.IsDir(dir) {
 		err := helper.Mkdir(dir)
 		if err != nil {
-			L.Debug("目录无法创建"+err.Error(), LEVEL_ALERT)
+			L.Debug("暂存目录无法创建"+err.Error(), LEVEL_ERROR)
 			return
 		}
 	}
@@ -265,26 +265,26 @@ func (E *EsService)PhpDataSave(phpLine int64, content string)  {
 //发送批量数据
 func (E *EsService) BuckPost(phpLine int64, content string, jobs string) bool {
 	if !Cf.Factory.On {
-		L.Debug(fmt.Sprintf("暂停数据发送,%d", phpLine), LEVEL_INFO)
+		L.Debug(fmt.Sprintf("暂停数据发送,%d", phpLine), LEVEL_NOTICE)
 		E.PhpDataSave(phpLine, content)
 		return false
 	}
 	if len(EsCanUse) > 0 {
-		L.Debug(fmt.Sprintf("es不可用，进行暂存，%d", phpLine), LEVEL_INFO)
+		L.Debug(fmt.Sprintf("es不可用，进行暂存，%d", phpLine), LEVEL_ERROR)
 		E.PhpDataSave(phpLine, content)
 		return false
 	}
 	url := "http://"+E.GetHost()+"/_bulk"
 	str, err := E.PostData(url, content)
 	if err != nil {
-		L.Debug(fmt.Sprintf("es发送错误，进行暂存，%d", phpLine), LEVEL_INFO)
+		L.Debug(fmt.Sprintf("es发送错误，进行暂存，%d", phpLine), LEVEL_ERROR)
 		E.PhpDataSave(phpLine, content)
 		return false
 	}
 	jsonData, _ := simplejson.NewJson([]byte(str))
 	errors, err := jsonData.Get("data").Get("errors").Bool()
 	if errors {
-		L.Debug(fmt.Sprintf("es返回值错误，进行暂存，%d"+err.Error(), phpLine), LEVEL_INFO)
+		L.Debug(fmt.Sprintf("es返回值错误，进行暂存，%d"+err.Error(), phpLine), LEVEL_ERROR)
 		E.PhpDataSave(phpLine, content)
 		return errors
 	} else {
@@ -314,7 +314,7 @@ func (E *EsService) Post() {
 				url := "http://" + E.GetHost() + "/" + index.IndexName.Index + "/" + index.IndexName.Type
 				data := string(content)
 				if len(EsCanUse) == 1 {
-					L.Debug("es cannot use, wait", LEVEL_INFO)
+					L.Debug("es cannot use, wait", LEVEL_ERROR)
 					indexContent, _ := json.Marshal(index)
 					E.SaveToStorage(string(indexContent) + "\n" + data + "\n")
 					continue
@@ -370,7 +370,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 					contentNew := make([]string, 0)
 					for index, value := range buckRes.Items {
 						if value.Index.Status != 201 {
-							L.Debug(fmt.Sprintf("返回值错误, code:%d, %s, %s", value.Index.Status, value.Index.Error.Type, value.Index.Error.Reason), LEVEL_NOTICE)
+							L.Debug(fmt.Sprintf("返回值错误, code:%d, %s, %s", value.Index.Status, value.Index.Error.Type, value.Index.Error.Reason), LEVEL_ERROR)
 							contentNew = append(contentNew, contentArr[index*2])
 							contentNew = append(contentNew, contentArr[index*2+1])
 						}

@@ -4,20 +4,17 @@ import (
 	"time"
 )
 
-type WorkerMsg struct {
-	Date      int64   `json:"date"`
-	AppId     string  `json:"appid"`
-	HostName  string  `json:"hostname"`
+type SystemAnalysis struct {
 	LineCount int64   `json:"line_count"`
 	SleepTime float64 `json:"sleep_time"`
 
 	//请求统计
 	JobCount      int64 `json:"job_count"`
-	BuckCount     int64 `json:"buck_count"`
 	JobQueue      int   `json:"job_queue"`
 	JobProcessing int64 `json:"job_processing"`
 	JobSuccess    int64 `json:"job_success"`
-	JobErrorCount int64 `json:"job_error"`
+	BuckCount     int64 `json:"buck_count"`
+	PostCurrent   int   `json:"post_current"`
 
 	//运行时间
 	TimeStart      int64  `json:"time_start"`
@@ -36,7 +33,21 @@ type WorkerMsg struct {
 	Load           float64 `json:"load"`
 	MemRate        float64 `json:"mem_rate"`
 
+	CodeError    float64 `json:"code_error"`
+	CodeAlert    float64 `json:"code_alert"`
+	CodeCritical float64 `json:"code_critical"`
+
 	BatchLength int `json:"batch_length"`
+
+	HostHealth bool `json:"host_health"`
+}
+
+type WorkerMsg struct {
+	SystemAnalysis
+
+	Date      int64   `json:"date"`
+	AppId     string  `json:"appid"`
+	HostName  string  `json:"hostname"`
 
 	//workJobs
 	HostHealth bool `json:"host_health"`

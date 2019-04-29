@@ -52,7 +52,7 @@
     "Storage": "storage", //es暂存目录
     "recover_thread": 50 //es恢复暂存数据线程数
   },
-  "version": "0.14",//脚本版本
+  "version": "0.15",//脚本版本
   "env": "log", //用作es索引前缀，如果非空将使用-与时间分隔
   "appid": "" //appid字段，区分平台，默认使用主机名字符串
 }

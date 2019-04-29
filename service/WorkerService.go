@@ -20,40 +20,10 @@ import (
 )
 
 type Analysis struct {
-	LineCount int64   `json:"line_count"`
-	SleepTime float64 `json:"sleep_time"`
-
-	//请求统计
-	JobCount      int64 `json:"job_count"`
-	JobQueue      int   `json:"job_queue"`
-	JobProcessing int64 `json:"job_processing"`
-	JobSuccess    int64 `json:"job_success"`
-	JobErrorCount int64 `json:"job_error"`
-	BuckCount     int64 `json:"buck_count"`
-	PostCurrent   int `json:"post_current"`
-
-	//运行时间
-	TimeStart      int64  `json:"time_start"`
-	TimeStartStr   string `json:"time_start_str"`
-	TimeEnd        int64  `json:"time_end"`
-	TimeEndStr     string `json:"time_end_str"`
-	TimeWork       string `json:"time_work"`
-	TimeDelay      int64  `json:"time_delay"`
-	TimeDelayStr   string `json:"time_delay_str"`
-	TimePostEnd    int64  `json:"time_post_end"`
-	TimePostEndStr string `json:"time_post_end_str"`
-
-	HeapMemoryUsed uint64  `json:"memory_used_M"`
-	SysMemoryUsed  uint64  `json:"sys_memory_used_M"`
-	CpuRate        float64 `json:"cpu_rate"`
-	Load           float64 `json:"load"`
-	MemRate        float64 `json:"mem_rate"`
-
-	BatchLength int `json:"batch_length"`
+	object.SystemAnalysis
 
 	//workJobs
-	WorkerMap  []*Worker `json:"worker_map"`
-	HostHealth bool      `json:"host_health"`
+	WorkerMap []*Worker `json:"worker_map"`
 
 	Cf *ConfigService `json:"cf"`
 }
@@ -98,7 +68,7 @@ func StartWork() {
 				//查看当前文件
 				go func() {
 					positionObj := GetPosition(GetPositionFile(item.Type))
-					L.Debug("日志路径"+positionObj.File, LEVEL_NOTICE)
+					L.Debug("当前日志路径"+positionObj.File, LEVEL_NOTICE)
 					if positionObj.File != "" {
 						TailNextFile(positionObj.File, item)
 					} else {
@@ -121,7 +91,7 @@ func StartWork() {
 							}
 							select {
 							case <-t.C:
-								L.Debug("日志切换检测", LEVEL_NOTICE)
+								L.Debug("日志切换检测", LEVEL_DEBUG)
 								t.Reset(time.Second * 3)
 								if Tail[item.Type] != nil && Tail[item.Type].Filename != "" {
 									nextFile := GetNextFile(item, Tail[item.Type].Filename)
@@ -130,7 +100,7 @@ func StartWork() {
 										formatNow := helper.TimeFormat("Y-m-d H:i:s",nowStamp)
 										formatEnd := helper.TimeFormat("Y-m-d H:i:s",An.TimeEnd)
 										if nowStamp-An.TimeEnd > int64(Cf.Msg.BatchTimeSecond+3) {
-											L.Debug("日志切换生效->"+nextFile+":"+formatNow+"-"+formatEnd, LEVEL_NOTICE)
+											L.Debug("日志切换生效->"+nextFile+":"+formatNow+"-"+formatEnd, LEVEL_INFO)
 											TailNextFile(nextFile, item)
 										}
 									}
@@ -156,6 +126,7 @@ func StopWork() {
 	}
 }
 
+//检测主机状态
 func CheckHostHealth() {
 	go func() {
 		TimeFive := time.NewTimer(time.Second * time.Duration(Cf.Monitor.CheckInterval))
@@ -166,7 +137,7 @@ func CheckHostHealth() {
 				TimeFive.Reset(time.Second * time.Duration(Cf.Monitor.CheckInterval))
 				GetAnalysis(true)
 				if An.MemRate > Cf.Monitor.MemRestart {
-					L.Debug("内存使用率超过10%，进程重启", LEVEL_NOTICE)
+					L.Debug("内存使用率超过10%，进程重启", LEVEL_ERROR)
 					RestartCmd()
 				}
 			case <-TimeThirty.C:
@@ -174,8 +145,11 @@ func CheckHostHealth() {
 				msg := new(object.WorkerMsg)
 				err := json.Unmarshal([]byte(MsgToJson(An)), msg)
 				if err != nil {
-					L.Debug("解析失败"+err.Error(), LEVEL_ERROR)
+					L.Debug("统计信息解析失败"+err.Error(), LEVEL_ERROR)
 				} else {
+					Lock.Lock()
+					An.CodeCritical, An.CodeAlert, An.CodeError = 0, 0, 0
+					Lock.Unlock()
 					msg.HostName, _ = os.Hostname()
 					msg.AppId = GetAppIdFromHostName(msg.HostName)
 					msg.Date = time.Now().Unix()
@@ -187,10 +161,9 @@ func CheckHostHealth() {
 	}()
 }
 
-//业务处理50%
+//业务处理
 func (w *Worker) handleJob(jobId string) {
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
-	var JobError int64 = 0
 	if item, ok := GetMap(jobId); ok {
 		if item.Type == "php" {
 			Msg := object.PhpMsg{}
@@ -204,7 +177,7 @@ func (w *Worker) handleJob(jobId string) {
 				}
 				L.Debug("content=>"+MsgToJson(Msg), LEVEL_DEBUG)
 			} else {
-				JobError = 1
+				L.Debug("xid不存在", LEVEL_NOTICE)
 			}
 		} else {
 			Msg := object.NginxMsg{}
@@ -219,7 +192,6 @@ func (w *Worker) handleJob(jobId string) {
 		}
 
 		Lock.Lock()
-		An.JobErrorCount += JobError
 		An.JobProcessing--
 		Lock.Unlock()
 		DelMap(jobId)
@@ -240,7 +212,7 @@ func (w *Worker) Start() {
 				w.handleJob(jobID)
 				w.IsWorking = false
 				if w.IsQuit {
-					L.Debug(fmt.Sprintf("worker: %s, will quit", w.ID), LEVEL_DEBUG)
+					L.Debug(fmt.Sprintf("worker: %s, will quit", w.ID), LEVEL_NOTICE)
 					break
 				}
 			}
@@ -532,14 +504,14 @@ func GetMem() float64 {
 func SetAnalysis() {
 	file, _ := ioutil.ReadFile(helper.GetPathJoin(Cf.AppPath, ".analysis"))
 	if len(file) == 0 {
-		L.Debug("analysis file empty", LEVEL_DEBUG)
+		L.Debug("analysis file empty", LEVEL_INFO)
 		return
 	}
 	An = Analysis{}
-	err1 := json.Unmarshal(file, &An)
+	err := json.Unmarshal(file, &An)
 	An.JobProcessing = 0
-	if err1 != nil {
-		L.Debug("analysis unmarshal error"+err1.Error(), LEVEL_ERROR)
+	if err != nil {
+		L.Debug("analysis unmarshal error"+err.Error(), LEVEL_ERROR)
 	}
 }
 
@@ -584,7 +556,7 @@ func SaveRunTimeStatus() {
 				line = GetNginxPostLineNumber()
 			}
 			P := object.Position{File: oTail.Filename, Line: line}
-			L.Debug(fmt.Sprintf("runtime status save,line +%d", line), LEVEL_NOTICE)
+			L.Debug(fmt.Sprintf("runtime status save,line +%d", line), LEVEL_INFO)
 			SetPosition(file, P)
 		}
 	}

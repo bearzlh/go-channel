@@ -29,7 +29,7 @@ const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\w+)* gro
 var readPath ReadPath
 
 func PhpProcessLine(Rp ReadPath) {
-	L.Debug("日志收集开始", LEVEL_NOTICE)
+	L.Debug("日志收集开始", LEVEL_INFO)
 	readPath = Rp
 	var currentId string
 	tail := Tail[Rp.Type]
