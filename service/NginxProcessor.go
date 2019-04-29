@@ -130,6 +130,6 @@ func ProcessNginxMsg(pm *object.NginxMsg, data string) {
 //参数查询
 func NginxQueryProcess(values url.Values, msg *object.NginxMsg) {
 	for field, list := range values {
-		msg.Query = append(msg.Query, object.Query{field, list[0]})
+		msg.Query = append(msg.Query, object.Query{Key: field, Value: list[0]})
 	}
 }

@@ -53,5 +53,6 @@ func TestAn(t *testing.T) {
 }
 
 func TestHost(t *testing.T) {
-	t.Log(service.Cf.AppId)
+	t.Log(service.Cf.Msg.BatchSize)
+	//t.Log(service.Cf.AppId)
 }

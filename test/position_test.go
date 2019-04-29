@@ -43,5 +43,6 @@ func TestFormatToTpl(t *testing.T)  {
 }
 
 func TestGetNextFile(t *testing.T) {
-	t.Log(service.GetNextFile(service.Cf.ReadPath[0], "/data/www/cps/runtime/log/201903/08_18.log"))
+	//t.Log(service.GetNextFile(service.Cf.ReadPath[0], "/data/www/cps/runtime/log/201903/08_18.log"))
+	t.Log(helper.FormatTimeStamp(service.Cf.Recover.From, ""))
 }

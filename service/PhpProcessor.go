@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,10 +17,11 @@ import (
 var phpLineNumber int64
 var phpLineLock sync.Mutex
 
-var phpPostLineNumber int64
+var phpPostLineNumber = int64(0)
 var phpPostLineLock sync.Mutex
 var LineTime float64
 var LineCount float64
+var UserTable = "openid recharge user"
 
 const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
@@ -59,6 +61,7 @@ func PhpProcessLine(Rp ReadPath) {
 	}
 }
 
+//依据cpu使用率设置读取日志的休眠时间
 func GetSleepTime() {
 	go func() {
 		for {
@@ -81,6 +84,7 @@ func GetSleepTime() {
 	}()
 }
 
+//为日志行分组
 func PhpLineToJob(text string, Type string, preId string) string {
 	check := helper.RegexpMatch(text, `^\[\d+\] ([[:alnum:]]{13}) `)
 	id := ""
@@ -125,10 +129,12 @@ func PhpLineToJob(text string, Type string, preId string) string {
 	}
 }
 
+//检测消息对象是否有效
 func CheckValid(msg *object.PhpMsg) bool {
 	return msg.Xid != ""
 }
 
+//获取php消息对象
 func GetPhpMsg(lines []string, pm *object.PhpMsg) {
 	for index, data := range lines {
 		if index == 0 {
@@ -144,9 +150,26 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 	if firstLine {
 		s := helper.RegexpMatch(line, PhpFirstLineRegex)
 		if len(s) > 0 {
+			p.Date = helper.FormatTimeStamp(string(s[3]), "")
+			if Cf.Recover.From != "" {
+				fromTime := helper.FormatTimeStamp(Cf.Recover.From, "")
+				toTime := helper.FormatTimeStamp(Cf.Recover.To, "")
+				if p.Date < fromTime {
+					return
+				}
+				if p.Date > toTime {
+					L.Debug("暂存过期，程序退出", LEVEL_NOTICE)
+					cmd := exec.Command("/bin/bash", "-c", "cp "+helper.GetPathJoin(Cf.AppPath, "storage/data") +" /usr/local/postlog/storage/")
+					_, err := cmd.Output()
+					if err != nil {
+						L.Debug(err.Error(), LEVEL_ERROR)
+					}
+					StopSignal <- os.Interrupt
+					return
+				}
+			}
 			p.LogLine, _ = strconv.ParseInt(string(s[1]), 10, 64)
 			p.Xid = string(s[2])
-			p.Date = helper.FormatTimeStamp(string(s[3]), "")
 			p.Remote = string(s[4])
 			p.Method = string(s[5])
 			p.Url = strings.TrimSpace(string(s[6]))
@@ -248,6 +271,19 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 
 				}
 			}
+
+			//采集用户信息
+			if strings.Contains(readPath.Pick, "user") {
+				if Message.Content[0:13] == "get_db_connect" {
+					res := helper.RegexpMatch(Message.Content, `get_db_connect table:(\w+) params:(\d+)`)
+					if len(res) > 0 {
+						tableName := string(res[1])
+						if strings.Contains(UserTable, tableName) {
+							p.UserId = string(res[2])
+						}
+					}
+				}
+			}
 		} else {
 			if len(p.Message) > 0 {
 				Match := helper.RegexpMatch(line, `^\[\d+\] (.*)`)
@@ -257,23 +293,29 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 	}
 }
 
-//参数查询
+//获取GET参数
 func QueryProcess(values url.Values, msg *object.PhpMsg) {
 	for field, list := range values {
-		msg.Query = append(msg.Query, object.Query{field, list[0]})
+		msg.Query = append(msg.Query, object.Query{Key: field, Value: list[0]})
 		switch field {
 		case "referral_id":
 			msg.ReferralId = list[0]
-			break;
+			break
 		case "book_id":
 			msg.BookId = list[0]
-			break;
+			break
 		case "chapter_id":
 			msg.ChapterId = list[0]
-			break;
+			break
 		case "agent_id":
 			msg.AgentId = list[0]
-			break;
+			break
+		case "user_id":
+			msg.UserId = list[0]
+			break
+		case "openid":
+			msg.OpenId = list[0]
+			break
 		}
 	}
 
@@ -294,10 +336,12 @@ func GetAppIdFromHostName(HostName string) string {
 	}
 }
 
+//获取日志读取位置文件
 func GetPositionFile(logType string) string {
 	return helper.GetPathJoin(Cf.AppPath, ".position_" + logType)
 }
 
+//设置php读取行
 func SetPhpLineNumber(line int64) int64 {
 	phpLineLock.Lock()
 	defer phpLineLock.Unlock()
@@ -305,6 +349,7 @@ func SetPhpLineNumber(line int64) int64 {
 	return phpLineNumber
 }
 
+//设置php发送行
 func SetPhpPostLineNumber(line int64, cover bool) int64 {
 	phpPostLineLock.Lock()
 	defer phpPostLineLock.Unlock()
@@ -319,12 +364,14 @@ func SetPhpPostLineNumber(line int64, cover bool) int64 {
 	return phpPostLineNumber
 }
 
+//获取php发送行
 func GetPhpPostLineNumber() int64 {
 	phpPostLineLock.Lock()
 	defer phpPostLineLock.Unlock()
 	return phpPostLineNumber
 }
 
+//提高php读取行
 func IncreasePhpLineNumber() int64 {
 	phpLineLock.Lock()
 	defer phpLineLock.Unlock()
@@ -332,6 +379,7 @@ func IncreasePhpLineNumber() int64 {
 	return phpLineNumber
 }
 
+//解析url
 func ParseUrl(urlStr string) (*url.URL, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {

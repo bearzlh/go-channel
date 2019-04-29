@@ -108,7 +108,7 @@ func TestSend(t *testing.T) {
 			low := len(sub) - 13
 			service.L.Debug(fmt.Sprintf("%s %s %d", sub[low:], dateLog, sleep - timeUsed), service.LEVEL_DEBUG)
 			tmp = strings.Replace(tmp, "5c88bcfe25c75", sub[low:], 37)
-			service.L.WriteAppend("/data/www/cps/runtime/log/201903/"+dateLog+".log", tmp)
+			helper.FilePutContents("/data/www/cps/runtime/log/201903/"+dateLog+".log", tmp, true)
 			end := time.Now().UnixNano()
 			timeUsed = time.Duration(end - start)
 		}

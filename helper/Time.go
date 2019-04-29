@@ -12,7 +12,7 @@ func TimeFormat(format string, timestamp int64) string {
 	if timestamp != 0 {
 		now = time.Unix(timestamp, 0)
 	}
-	a := []string{}
+	a := make([]string, 0)
 	for _, char := range format {
 		switch char {
 		case 'Y':
@@ -62,7 +62,7 @@ func FormatToLayout(format string) string {
 		's': "05",
 	}
 
-	a := []string{}
+	a := make([]string, 0)
 	for _, char := range format {
 		switch char {
 		case 'Y':
@@ -97,6 +97,7 @@ func FormatTime(second int64) string {
 	return duration.String()
 }
 
+//获取日志文件的时间间隔
 func GetMinDuration(layout string) int64 {
 	str := layout[len(layout)-1]
 	var res int64

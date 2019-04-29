@@ -3,6 +3,7 @@ package test
 import (
 	"bytes"
 	"fmt"
+	"os/exec"
 	"testing"
 	"text/template"
 	"time"
@@ -91,9 +92,19 @@ func TestStorage(t *testing.T) {
 }
 
 func TestStorageSend(t *testing.T) {
-	service.InitWorkPool()
+	service.InitFactory()
 	service.Es.CheckStorage()
 	select {
 
+	}
+}
+
+func TestCp(t *testing.T) {
+	service.InitFactory()
+	t.Log("cp", helper.GetPathJoin(service.Cf.AppPath, "storage/data") +" /usr/local/postlog/storage/")
+	cmd := exec.Command("/usr/local/bin/bash", "-c", "cp "+helper.GetPathJoin(service.Cf.AppPath, "storage/data") +" /usr/local/postlog/storage/")
+	_, err := cmd.Output()
+	if err != nil {
+		service.L.Debug(err.Error(), service.LEVEL_ERROR)
 	}
 }

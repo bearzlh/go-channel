@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
+	"strings"
 	"time"
 	"workerChannel/helper"
 )
@@ -18,10 +19,10 @@ type ConfigService struct {
 	AppId    string     `json:"appid"`
 	Version  string     `json:"version"`
 	Log      struct {
-		Path       string `json:"path"`
-		Level      string `json:"level"`
-		FormatType string `json:"format_type"`
-		Format     string `json:"format"`
+		Path        string `json:"path"`
+		Level       string `json:"level"`
+		FormatTime  string `json:"format_time"`
+		FormatLevel bool   `json:"format_level"`
 	} `json:"log"`
 	Factory struct {
 		WorkerMax  int  `json:"worker_max"`
@@ -34,10 +35,10 @@ type ConfigService struct {
 		BatchTimeSecond int    `json:"batch_time_second"`
 		SendType        string `json:"send_type"`
 	} `json:"msg"`
-	PhpTimeWindow int64    `json:"php_time_window"`
+	PhpTimeWindow int64  `json:"php_time_window"`
 	AppPath       string `json:"app_path"`
 	ServerPort    string `json:"server_port"`
-	Es struct {
+	Es            struct {
 		Host           string `json:"host"`
 		IndexFormat    string `json:"index_format"`
 		Storage        string `json:"storage"`
@@ -46,40 +47,37 @@ type ConfigService struct {
 		RecoverThread  int    `json:"recover_thread"`
 	} `json:"es"`
 	Monitor struct {
-		Cpu        float64 `json:"cpu"`
-		MemRestart float64 `json:"memory_restart"`
-		MemStop    float64 `json:"memory_stop"`
-		SleepIntervalNs int `json:"sleep_interval_ns"`
-		PickInterval    int `json:"pick_interval"`
-		CheckInterval   int `json:"check_interval"`
+		Cpu             float64 `json:"cpu"`
+		MemRestart      float64 `json:"memory_restart"`
+		MemStop         float64 `json:"memory_stop"`
+		SleepIntervalNs int     `json:"sleep_interval_ns"`
+		PickInterval    int     `json:"pick_interval"`
+		CheckInterval   int     `json:"check_interval"`
 	} `json:"monitor"`
+	Recover struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"recover"`
 }
 
 type ReadPath struct {
-	Dir        string   `json:"dir"`
-	TimeFormat string   `json:"time_format"`
-	Suffix     string   `json:"suffix"`
-	Type       string   `json:"type"`
-	On         bool     `json:"on"`
-	Continue   bool     `json:"continue"`
+	Dir        string `json:"dir"`
+	TimeFormat string `json:"time_format"`
+	Suffix     string `json:"suffix"`
+	Type       string `json:"type"`
+	On         bool   `json:"on"`
+	Continue   bool   `json:"continue"`
 	Pick       string `json:"pick"`
 }
 
+//全局
 var Cf *ConfigService
-
-//保证单例模式
-var ConfigBool = make(chan bool, 1)
 
 //初始化配置，加载config配置文件
 func GetConfig(path string) *ConfigService {
-	ConfigBool <- true
-	if Cf == nil {
-		Cf = &ConfigService{}
-		Cf.AppPath = path
-		Cf.Log.Path = "log"
-		Cf.loadFile()
-	}
-	<-ConfigBool
+	Cf = &ConfigService{}
+	Cf.AppPath = path
+	Cf.loadFile()
 	return Cf
 }
 
@@ -96,7 +94,6 @@ func (C *ConfigService) loadFile() *ConfigService {
 		L.outPut("再次尝试")
 		C.loadFile()
 		return C
-		//ExitProgramme(os.Interrupt)
 	}
 
 	err = json.Unmarshal(content, &Cf)
@@ -107,20 +104,20 @@ func (C *ConfigService) loadFile() *ConfigService {
 		L.outPut("再次尝试")
 		C.loadFile()
 		return C
-		//ExitProgramme(os.Interrupt)
 	}
 
 	return C
 }
 
+//配置文件动态加载
 func (C *ConfigService) ConfigWatch() {
 	watch, err := fsnotify.NewWatcher()
 	if err != nil {
 		L.outPut(err.Error())
 	}
-	configFile := Cf.AppPath + Split + ConfigName + Ext
+	configFile := helper.GetPathJoin(Cf.AppPath, ConfigName+Ext)
 	err = watch.Add(configFile)
-	L.outPut("watching config file:" + Cf.AppPath + Split + ConfigName + Ext)
+	L.outPut("watching config file:" + configFile)
 	if err != nil {
 		L.outPut(err.Error())
 	}
@@ -167,4 +164,27 @@ func (C *ConfigService) ConfigWatch() {
 			}
 		}
 	}()
+}
+
+//日志等级配置
+func (C *ConfigService) GetLevel() string {
+	return C.Log.Level
+}
+
+//日志格式参数
+func (C *ConfigService) GetFormatTime() string {
+	return C.Log.FormatTime
+}
+
+//日志格式类型
+func (C *ConfigService) GetFormatLevel() bool {
+	return C.Log.FormatLevel
+}
+
+//日志路径
+func (C *ConfigService) GetPath() string {
+	if !strings.HasPrefix(Cf.Log.Path, "/") {
+		Cf.Log.Path = helper.GetPathJoin(Cf.AppPath, Cf.Log.Path)
+	}
+	return C.Log.Path
 }

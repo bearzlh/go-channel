@@ -72,7 +72,11 @@ func StartWork() {
 					if positionObj.File != "" {
 						TailNextFile(positionObj.File, item)
 					} else {
-						Log := GetLogFile(item, 0)
+						timeFrom := int64(0)
+						if Cf.Recover.From != "" {
+							timeFrom = helper.FormatTimeStamp(Cf.Recover.From, "")
+						}
+						Log := GetLogFile(item, timeFrom)
 						TailNextFile(Log, item)
 					}
 				}()
@@ -87,7 +91,7 @@ func StartWork() {
 							item = Cf.ReadPath[i]
 							if !Cf.Factory.On {
 								L.Debug("日志切换检测停止", LEVEL_NOTICE)
-								break;
+								break
 							}
 							select {
 							case <-t.C:
@@ -126,7 +130,7 @@ func StopWork() {
 	}
 }
 
-//检测主机状态
+//检测主机状态并发送统计信息
 func CheckHostHealth() {
 	go func() {
 		TimeFive := time.NewTimer(time.Second * time.Duration(Cf.Monitor.CheckInterval))
@@ -137,7 +141,7 @@ func CheckHostHealth() {
 				TimeFive.Reset(time.Second * time.Duration(Cf.Monitor.CheckInterval))
 				GetAnalysis(true)
 				if An.MemRate > Cf.Monitor.MemRestart {
-					L.Debug("内存使用率超过10%，进程重启", LEVEL_ERROR)
+					L.Debug(fmt.Sprintf("内存使用率超过%f%%，进程重启", Cf.Monitor.MemRestart), LEVEL_NOTICE)
 					RestartCmd()
 				}
 			case <-TimeThirty.C:
@@ -200,7 +204,7 @@ func (w *Worker) handleJob(jobId string) {
 	}
 }
 
-//初始化任务队列
+//worker等待工作
 func (w *Worker) Start() {
 	go func() {
 		L.Debug(fmt.Sprintf("worker %s waiting", w.ID), LEVEL_NOTICE)
@@ -220,6 +224,7 @@ func (w *Worker) Start() {
 	}()
 }
 
+//初始化worker
 func NewWorker() {
 	id, _ := uuid.NewV4()
 	worker := &Worker{ID: id.String(), IsWorking: false}
@@ -229,7 +234,7 @@ func NewWorker() {
 }
 
 //初始化工厂
-func InitWorkPool() {
+func InitFactory() {
 	if An.TimeStart == 0 {
 		An.TimeStart = time.Now().Unix()
 	}
@@ -271,7 +276,7 @@ func SetWorker(n int) {
 
 }
 
-//执行下一个文件
+//读取下一个文件
 func TailNextFile(FileName string, Rp ReadPath) {
 	L.Debug("check "+Rp.Type, LEVEL_NOTICE)
 	f := PhpProcessLine
@@ -281,7 +286,7 @@ func TailNextFile(FileName string, Rp ReadPath) {
 		break
 	case "nginx":
 		f = NginxProcessLine
-		break;
+		break
 	}
 	if Tail[Rp.Type] != nil && Tail[Rp.Type].Filename != "" {
 		if Tail[Rp.Type].Filename != FileName {
@@ -531,8 +536,12 @@ func GetNextFile(rp ReadPath, currentFile string) string {
 			resFile = nextFile
 			break
 		}
-		if nextTime > time.Now().Unix() {
-			break;
+		endtime := time.Now().Unix()
+		if Cf.Recover.To != "" {
+			endtime = helper.FormatTimeStamp(Cf.Recover.To, "")
+		}
+		if nextTime > endtime {
+			break
 		}
 	}
 
@@ -561,5 +570,10 @@ func SaveRunTimeStatus() {
 		}
 	}
 
-	L.WriteOverride(helper.GetPathJoin(Cf.AppPath, ".analysis"), string(GetAnalysis(false)))
+	fileName := helper.GetPathJoin(Cf.AppPath, ".analysis")
+	content := string(GetAnalysis(false))
+	err := helper.FilePutContents(fileName, content, false)
+	if err != nil {
+		L.Debug("保存状态失败"+err.Error(), LEVEL_ERROR)
+	}
 }

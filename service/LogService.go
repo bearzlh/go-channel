@@ -3,85 +3,80 @@ package service
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"time"
 	"workerChannel/helper"
 )
 
+//日志类型
 const (
-	LEVEL_DEBUG = "debug"
-	LEVEL_INFO = "info"
-	LEVEL_NOTICE = "notice"
-	LEVEL_ERROR = "error"
-	LEVEL_ALERT = "alert"
-	LEVEL_CRITICAL = "critical"
+	LEVEL_DEBUG    = "debug"    //细节信息
+	LEVEL_INFO     = "info"     //运行时信息
+	LEVEL_NOTICE   = "notice"   //发行变化的关键信息
+	LEVEL_ERROR    = "error"    //影响正常功能，只影响当前运行线程
+	LEVEL_ALERT    = "alert"    //严重影响正常功能，影响整个进程的运行
+	LEVEL_CRITICAL = "critical" //系统问题，进程退出
 )
 
+//日志文件指针
 var FilePoint *os.File
+//日志名称
 var FileName string
-var LogLevel map[string]int8
+
+//日志等级
+var LogLevel = map[string]int8{
+	LEVEL_DEBUG:    1,
+	LEVEL_INFO:     2,
+	LEVEL_NOTICE:   3,
+	LEVEL_ERROR:    4,
+	LEVEL_ALERT:    5,
+	LEVEL_CRITICAL: 6,
+}
+
+//日志配置接口
+type LogConfigInterface interface {
+	GetLevel() string
+	GetFormatTime() string
+	GetFormatLevel() bool
+	GetPath() string
+}
 
 type LogService struct {
-
+	Config LogConfigInterface
 }
 
+//全局
 var L *LogService
 
-var chLog = make(chan bool, 1)
-var LockPosition sync.Mutex
-
-func GetLog() *LogService {
-	chLog <- true
-	if L == nil {
-		L = &LogService{}
-		LogLevel = map[string]int8{
-			LEVEL_DEBUG:    1,
-			LEVEL_INFO:     2,
-			LEVEL_NOTICE:   3,
-			LEVEL_ERROR:    4,
-			LEVEL_ALERT:    5,
-			LEVEL_CRITICAL: 6,
-		}
-		L.setLogDir()
-	}
-	<- chLog
-
-	return L
-}
-
-func (Log *LogService)DebugOnError(err error) {
-	if err != nil {
-		L.Debug(err.Error(), LEVEL_DEBUG)
-		L.outPut(fmt.Sprintf("%s\n", err))
-	}
+func GetLog(config LogConfigInterface) {
+	L = &LogService{}
+	L.Config = config
 }
 
 //打日志
 func (Log *LogService) Debug(msg string, level string) {
 	logLevel := int8(0)
-	if _, ok := LogLevel[Cf.Log.Level]; ok {
-		logLevel = LogLevel[Cf.Log.Level]
+	if _, ok := LogLevel[Log.Config.GetLevel()]; ok {
+		logLevel = LogLevel[Log.Config.GetLevel()]
 	}
 
 	currentLevel := LogLevel[level]
 
 	if currentLevel >= logLevel {
-		logFile := L.getLogPath(level)
+		logFile := Log.getLogPath(level)
 		err := helper.Mkdir(path.Dir(logFile))
 		if err != nil {
-			L.outPut(fmt.Sprintf("%s\n", err))
+			Log.outPut(fmt.Sprintf("%s\n", err))
 			ExitProgramme(os.Interrupt)
 		}
-		content := L.getMsg(msg, level)
-		L.WriteLog(logFile, content)
+		content := Log.getMsg(msg, level)
+		Log.WriteLog(logFile, content)
 		if currentLevel >= 4 {
 			errorContent := string(debug.Stack())
-			L.WriteLog(logFile, errorContent)
+			Log.WriteLog(logFile, errorContent)
 		}
 		switch level {
 		case LEVEL_ERROR:
@@ -105,89 +100,37 @@ func (Log *LogService) Debug(msg string, level string) {
 
 func (Log *LogService) getLogPath(level string) string {
 	format := make([]string, 0)
-	if strings.Contains(Cf.Log.FormatType, "time") {
-		format = append(format, helper.TimeFormat(Cf.Log.Format, 0))
+	if Log.Config.GetFormatTime() != "" {
+		format = append(format, helper.TimeFormat(Log.Config.GetFormatTime(), 0))
 	}
 
-	if strings.Contains(Cf.Log.FormatType, "level") {
+	if Log.Config.GetFormatLevel() {
 		format = append(format, level)
 	}
 
-	return helper.GetPathJoin(Cf.Log.Path, strings.Join(format, ".")+".log")
-}
-
-func (Log *LogService)setLogDir() {
-	if !strings.HasPrefix(Cf.Log.Path, "/") {
-		Cf.Log.Path = helper.GetPathJoin(Cf.AppPath, Cf.Log.Path)
-	}
+	return helper.GetPathJoin(Log.Config.GetPath(), strings.Join(format, ".")+".log")
 }
 
 //日志信息格式化
 func (Log *LogService) getMsg(msg string, level string) string {
 	Nano := time.Now().Nanosecond() / 1000000
 	msg = fmt.Sprintf("level:[%s]\ttime:[%s.%d]\tpid:[%d]\tmsg:[%s]", level, time.Now().Format("2006-01-02 15:04:05"), Nano, os.Getpid(), msg)
-	L.outPut(msg)
 	return msg + "\n"
 }
 
-func (Log *LogService)outPut(msg string) {
-	fmt.Println(msg)
+func (Log *LogService) outPut(msg string) {
+	fmt.Print(msg)
 }
 
+//写日志
 func (Log *LogService) WriteLog(fileName string, content string) {
+	Log.outPut(content)
 	if FileName == "" || fileName != FileName {
 		FileName = fileName
 		FilePoint, _ = os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	}
 	_, err := io.WriteString(FilePoint, content)
 	if err != nil {
-		L.outPut(fmt.Sprintf("%s", err.Error()))
+		Log.outPut(fmt.Sprintf("%s", err.Error()))
 	}
-}
-
-func (Log *LogService) WriteOverride(fileName string, content string) {
-	LockPosition.Lock()
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-	defer func() {
-		if err := file.Close(); err != nil {
-			L.Debug("close file error"+err.Error(), LEVEL_ERROR)
-		}
-		LockPosition.Unlock()
-	}()
-	if err != nil {
-		L.outPut(fmt.Sprintf("%s\n", err))
-		return
-	}
-	_, err1 := io.WriteString(file, content)
-	if err != nil {
-		L.outPut(fmt.Sprintf("%s\n", err1))
-	}
-}
-
-func (Log *LogService) WriteAppend(fileName string, content string) {
-	LockPosition.Lock()
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	defer func() {
-		if err := file.Close(); err != nil {
-			L.Debug("close file error"+err.Error(), LEVEL_ERROR)
-		}
-		LockPosition.Unlock()
-	}()
-	if err != nil {
-		L.outPut(fmt.Sprintf("%s\n", err))
-		return
-	}
-	_, err1 := io.WriteString(file, content)
-	if err != nil {
-		L.outPut(fmt.Sprintf("%s\n", err1))
-	}
-}
-
-func (Log *LogService) ReadContent(fileName string) string {
-	f, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		L.Debug("文件读取失败:"+err.Error(), LEVEL_DEBUG)
-		return ""
-	}
-	return string(f)
 }

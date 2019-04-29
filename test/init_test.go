@@ -9,6 +9,6 @@ import (
 func TestMain(m *testing.M) {
 	dir, _ := filepath.Abs("..")
 	service.GetConfig(dir)
-	service.GetLog()
+	service.GetLog(service.Cf)
 	m.Run()
 }

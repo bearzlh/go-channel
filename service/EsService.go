@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/bitly/go-simplejson"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -12,12 +14,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"workerChannel/helper"
 	"workerChannel/object"
 )
 
 type EsService struct {
+
 }
 
 var Es *EsService
@@ -32,20 +36,21 @@ var ConcurrentPost chan int
 var ThreadLimit chan int
 
 func (E *EsService) Init() {
-	//es是否可用
-	E.CheckEsCanAccess()
-	//单条数据发送
-	E.Post()
-	//检测暂存
-	E.CheckStorage()
-	//检测批量发送队列
-	if Cf.Msg.IsBatch {
-		Es.BuckWatch()
+	if Cf.Recover.From == "" {
+		//es是否可用
+		E.CheckEsCanAccess()
+		//单条数据发送
+		E.Post()
+		//检测暂存
+		E.CheckStorage()
+		ConcurrentPost = make(chan int, Cf.Es.ConcurrentPost)
+		ThreadLimit = make(chan int, Cf.Es.RecoverThread)
 	}
-	ConcurrentPost = make(chan int, Cf.Es.ConcurrentPost)
-	ThreadLimit = make(chan int, Cf.Es.RecoverThread)
+	//检测批量发送队列
+	Es.BuckWatch()
 }
 
+//检查es是否可用
 func (E *EsService) CheckEsCanAccess() {
 	go func() {
 		t := time.NewTimer(time.Second * 2)
@@ -73,6 +78,7 @@ func (E *EsService) CheckEsCanAccess() {
 	}()
 }
 
+//获取es地址
 func (E *EsService) GetHost() string {
 	hostStrings := strings.Split(Cf.Es.Host, ",")
 	s := rand.NewSource(time.Now().UnixNano())
@@ -80,6 +86,7 @@ func (E *EsService) GetHost() string {
 	return hostStrings[r.Intn(len(hostStrings))]
 }
 
+//检查发送队列
 func (E *EsService) BuckWatch() {
 	go func() {
 		t := time.NewTimer(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
@@ -114,7 +121,7 @@ func (E *EsService) BuckWatch() {
 	}()
 }
 
-//检测暂存
+//检查暂存
 func (E *EsService) CheckStorage() {
 	go func() {
 		for {
@@ -134,45 +141,61 @@ func (E *EsService) CheckStorage() {
 				dataPost := make([]string, 0)
 				count := 0
 				L.Debug("send loop start", LEVEL_INFO)
-				//并发线程限制
-				threadOver := make(chan int, 1)
+				sending := make(chan bool, 1)
+				sengindLock := new(sync.Mutex)
 				for {
-					line, err := rd.ReadString('\n')
+					line, errRead := rd.ReadString('\n')
 					if line != "" {
 						count++
 						dataPost = append(dataPost, line)
 					}
 					if count%2 == 0 {
-						if len(dataPost) == Cf.Msg.BatchSize*2 {
+						if len(dataPost) >= Cf.Msg.BatchSize*2 {
 							postData := strings.Join(dataPost, "")
-							dataPost = make([]string, Cf.Msg.BatchSize*2)
 							ThreadLimit<-1
+							L.Debug(fmt.Sprintf("线程数, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
+							dataPost = make([]string, 0)
 							go func() {
+								sengindLock.Lock()
+								if len(sending) == 0 {
+									sending<-true
+								}
+								sengindLock.Unlock()
 								_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
 								if err != nil {
 									L.Debug("暂存数据存储错误"+err.Error(), LEVEL_ERROR)
 									E.SaveToStorage(postData)
 								}
-								<-ThreadLimit
-								if len(ThreadLimit) == 0 {
-									threadOver<-1
+								sengindLock.Lock()
+								if len(sending) != 0 {
+									<-sending
 								}
+								sengindLock.Unlock()
+								<-ThreadLimit
 							}()
 						}
-						if err != nil || io.EOF == err {
+						if errRead != nil || io.EOF == errRead {
 							if len(dataPost) > 0 {
 								postData := strings.Join(dataPost, "")
 								ThreadLimit<-1
+								L.Debug(fmt.Sprintf("线程数, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
 								go func() {
+									sengindLock.Lock()
+									if len(sending) == 0 {
+										sending<-true
+									}
+									sengindLock.Unlock()
 									_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
 									if err != nil {
 										L.Debug("暂存数据存储错误"+err.Error(), LEVEL_ERROR)
 										E.SaveToStorage(postData)
 									}
-									<-ThreadLimit
-									if len(ThreadLimit) == 0 {
-										threadOver<-1
+									sengindLock.Lock()
+									if len(sending) != 0 {
+										<-sending
 									}
+									sengindLock.Unlock()
+									<-ThreadLimit
 								}()
 							}
 							break
@@ -180,22 +203,23 @@ func (E *EsService) CheckStorage() {
 					}
 				}
 				L.Debug(fmt.Sprintf("send loop end, 发送数据量:%d", count/2), LEVEL_INFO)
-				select {
-				case <-threadOver:
-					err := f.Close()
-					if err != nil {
-						L.Debug("文件关闭失败"+f.Name()+err.Error(), LEVEL_ERROR)
-					}
-					errRemove := os.Remove(fileName)
-					if errRemove != nil {
-						L.Debug("文件删除失败"+fileName, LEVEL_ERROR)
-					}
-					back := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, "back")
-					if helper.IsFile(back) {
-						errRename := os.Rename(back, fileName)
-						if errRename != nil {
-							L.Debug("文件重命名失败,from:"+back+" to:"+fileName, LEVEL_ERROR)
-						}
+				errClose := f.Close()
+				if errClose != nil {
+					L.Debug("文件关闭失败"+f.Name()+err.Error(), LEVEL_ERROR)
+				}
+				L.Debug("文件关闭"+f.Name(), LEVEL_INFO)
+				errRemove := os.Remove(fileName)
+				if errRemove != nil {
+					L.Debug("文件删除失败"+fileName, LEVEL_ERROR)
+				}
+				L.Debug("文件删除"+f.Name(), LEVEL_INFO)
+				back := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, "back")
+				if helper.IsFile(back) {
+					errRename := os.Rename(back, fileName)
+					if errRename != nil {
+						L.Debug("文件重命名失败,from:"+back+" to:"+fileName, LEVEL_ERROR)
+					} else {
+						L.Debug("文件重命名,from:"+back+" to:"+fileName, LEVEL_INFO)
 					}
 				}
 			}
@@ -203,7 +227,8 @@ func (E *EsService) CheckStorage() {
 	}()
 }
 
-func (E *EsService)SaveToStorage(content string) {
+//将内存暂存到本地
+func (E *EsService) SaveToStorage(content string) {
 	dir := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage)
 	if !helper.IsDir(dir) {
 		err := helper.Mkdir(dir)
@@ -218,7 +243,10 @@ func (E *EsService)SaveToStorage(content string) {
 		name = "back"
 	}
 	fileName := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, name)
-	L.WriteAppend(fileName, content)
+	err := helper.FilePutContents(fileName, content, true)
+	if err != nil {
+		L.Debug("日志暂存失败"+err.Error(), LEVEL_ERROR)
+	}
 }
 
 //添加数据
@@ -264,29 +292,35 @@ func (E *EsService)PhpDataSave(phpLine int64, content string)  {
 
 //发送批量数据
 func (E *EsService) BuckPost(phpLine int64, content string, jobs string) bool {
+	if Cf.Recover.From != "" {
+		L.Debug(fmt.Sprintf("数据恢复中,%d", phpLine), LEVEL_INFO)
+		E.PhpDataSave(phpLine, content)
+		return false
+	}
+
 	if !Cf.Factory.On {
 		L.Debug(fmt.Sprintf("暂停数据发送,%d", phpLine), LEVEL_NOTICE)
 		E.PhpDataSave(phpLine, content)
 		return false
 	}
 	if len(EsCanUse) > 0 {
-		L.Debug(fmt.Sprintf("es不可用，进行暂存，%d", phpLine), LEVEL_ERROR)
+		L.Debug(fmt.Sprintf("es不可用，进行暂存，%d", phpLine), LEVEL_INFO)
 		E.PhpDataSave(phpLine, content)
 		return false
 	}
 	url := "http://"+E.GetHost()+"/_bulk"
 	str, err := E.PostData(url, content)
 	if err != nil {
-		L.Debug(fmt.Sprintf("es发送错误，进行暂存，%d", phpLine), LEVEL_ERROR)
+		L.Debug(fmt.Sprintf("es发送错误，进行暂存，%d", phpLine), LEVEL_INFO)
 		E.PhpDataSave(phpLine, content)
 		return false
 	}
 	jsonData, _ := simplejson.NewJson([]byte(str))
-	errors, err := jsonData.Get("data").Get("errors").Bool()
-	if errors {
-		L.Debug(fmt.Sprintf("es返回值错误，进行暂存，%d"+err.Error(), phpLine), LEVEL_ERROR)
+	errorsGet, err := jsonData.Get("data").Get("errors").Bool()
+	if errorsGet {
+		L.Debug(fmt.Sprintf("es返回值错误，进行暂存，%d"+err.Error(), phpLine), LEVEL_INFO)
 		E.PhpDataSave(phpLine, content)
-		return errors
+		return errorsGet
 	} else {
 		Lock.Lock()
 		An.JobSuccess += int64(len(content) / 2)
@@ -294,11 +328,11 @@ func (E *EsService) BuckPost(phpLine int64, content string, jobs string) bool {
 		Lock.Unlock()
 		SetPhpPostLineNumber(phpLine, false)
 		L.Debug(fmt.Sprintf("发送成功,%d,jobs-->"+jobs, phpLine), LEVEL_INFO)
-		L.Debug(content, LEVEL_DEBUG)
-		return false
+		return true
 	}
 }
 
+//单条数据入列
 func (E *EsService) PostAdd(msg object.MsgInterface) {
 	PostDoc <- msg
 }
@@ -314,7 +348,7 @@ func (E *EsService) Post() {
 				url := "http://" + E.GetHost() + "/" + index.IndexName.Index + "/" + index.IndexName.Type
 				data := string(content)
 				if len(EsCanUse) == 1 {
-					L.Debug("es cannot use, wait", LEVEL_ERROR)
+					L.Debug("es cannot use, wait", LEVEL_INFO)
 					indexContent, _ := json.Marshal(index)
 					E.SaveToStorage(string(indexContent) + "\n" + data + "\n")
 					continue
@@ -337,9 +371,10 @@ func (E *EsService) Post() {
 	}()
 }
 
+//执行数据的发送
 func (E *EsService) PostData(url string, content string) (string, error) {
 	transport := http.Transport{
-		Dial:              dialTimeout,
+		DialContext: dialTimeout,
 		DisableKeepAlives: true,
 	}
 	client := http.Client{
@@ -355,6 +390,8 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 		if err != nil {
 			L.Debug("es请求错误，"+err.Error(), LEVEL_ERROR)
 			break
+		} else {
+			L.Debug("es请求成功", LEVEL_INFO)
 		}
 		byteC, _ = ioutil.ReadAll(res.Body)
 		if res.StatusCode == 200 || res.StatusCode == 201 {
@@ -376,6 +413,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 						}
 					}
 					content = strings.Join(contentNew, "\n") + "\n"
+					err = errors.New("es请求错误")
 					continue
 				}
 			}
@@ -384,12 +422,16 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 			L.Debug("post error"+string(byteC), LEVEL_ERROR)
 		}
 	}
+	if err == nil {
+		L.Debug("post success", LEVEL_NOTICE)
+	}
 	return string(byteC), err
 }
 
+//执行get请求
 func (E *EsService) GetData(url string) (string, error) {
 	transport := http.Transport{
-		Dial:              dialTimeout,
+		DialContext: dialTimeout,
 		DisableKeepAlives: true,
 	}
 	client := http.Client{
@@ -403,7 +445,8 @@ func (E *EsService) GetData(url string) (string, error) {
 	return string(byteStr), err
 }
 
-func dialTimeout(network, addr string) (net.Conn, error) {
+//api请求参数配置
+func dialTimeout(ctx context.Context, network, addr string) (net.Conn, error) {
 	conn, err := net.DialTimeout(network, addr, time.Second * 5)
 	if err != nil {
 		return conn, err

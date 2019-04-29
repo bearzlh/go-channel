@@ -76,6 +76,21 @@ func TestCookie1(t *testing.T)  {
 	t.Log(msg[0:3])
 }
 
+func TestDatabase(t *testing.T) {
+	//openid,recharge,user
+	msg := `get_db_connect table:user params:1908468`
+	regex := `get_db_connect table:(\w+) params:(\d+)`
+	res := helper.RegexpMatch(msg, regex)
+	if len(res) > 0 {
+		for _, item := range res {
+			t.Log(string(item))
+		}
+	} else {
+		t.Log(0)
+	}
+
+}
+
 func TestOrder(t *testing.T) {
 	//msg := "wechatpay_create_order_success!wxpay_id:5,wxpay_name:奇异书阁,mch_id:1518063301,channel_id:7234,user_id:5831708,money:50.00,good_id:39,out_trade_no:20190429133827_5831708_4zS2,api_run_time:0.223 s"
 	msgcallback := "wechatpay_callback_success!wxpay_id:1,channel_id:1778,money:0.01,good_id:3,out_trade_no:20190429155943_10131_iWfa"

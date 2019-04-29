@@ -24,8 +24,8 @@
   "log": {
     "path": "log",
     "level": "info",
-    "format_type": "time",
-    "format": "Ym/d_H"
+    "format_time": "Ym/d_H",
+    "format_level": false
   },
   "factory": {
     "worker_max": 10000,
@@ -51,10 +51,10 @@
     "host": "192.168.0.109:9200",
     "index_format": "Y.m.d",
     "retry": 5,
-    "concurrent_post": 20,
+    "concurrent_post": 10,
     "storage": "storage",
-    "recover_thread": 50
+    "recover_thread": 2
   },
-  "version": "0.15",
+  "version": "0.16",
   "appid": ""
 }
