@@ -25,6 +25,8 @@ const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
 const PhpFrontCookie = `.*? NetType:(\w+) IP:.*? \[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] user_id:(\w+)* openid:(.*?)* channel_id:(\w+)* agent_id:(\w+)* referral_id:(\w+)*`
 const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\w+)* group:(\w+)* `
+const PhpOrder = `(\w+)_create_order_(\w+)!wxpay_id:(.*?),wxpay_name:.*?,mch_id:.*?,channel_id:(.*?),user_id:(.*?),money:(.*?),good_id:(.*?),out_trade_no:.*?`
+const PhpOrderCallback = `(\w+)_callback_(\w+)!wxpay_id:(.*?),channel_id:(.*?),money:(.*?),good_id:(.*?),.*?`
 
 var readPath ReadPath
 
@@ -153,6 +155,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			if err != nil {
 				L.Debug("url parse error"+err.Error()+",url:"+p.Url, LEVEL_ERROR)
 			}else{
+				//添加get参数
 				if strings.Contains(readPath.Pick, "get") {
 					if len(u.Query()) > 0 {
 						QueryProcess(u.Query(), p)
@@ -185,6 +188,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			Message.Content = strings.TrimSpace(string(MatchMessage[4]))
 			p.Message = append(p.Message, Message)
 
+			//添加cookie参数
 			if strings.Contains(readPath.Pick, "cookie") {
 				if Message.Content[0:3] == "OS:" && len(p.Uri) >= 6 {
 					if p.Uri[0:6] == "/index" {
@@ -212,6 +216,36 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 							p.Group = string(res[6])
 						}
 					}
+				}
+			}
+
+			//添加订单参数
+			if strings.Contains(readPath.Pick, "order") {
+				var res [][]byte
+				if strings.Contains(p.Uri, "/api/recharge/pay") {
+					res = helper.RegexpMatch(Message.Content, PhpOrder)
+					if len(res) > 0 {
+						p.PayId = string(res[3])
+						p.PayType = string(res[1])
+						p.PayStatus = "create_" + string(res[2])
+						p.ChannelId = string(res[4])
+						p.UserId = string(res[5])
+						p.Money = helper.Round(string(res[6]), 2)
+						p.GoodId = string(res[7])
+					}
+				} else if strings.Contains(p.DomainPort, "callback") {
+					res = helper.RegexpMatch(Message.Content, PhpOrderCallback)
+					if len(res) > 0 {
+						p.PayId = string(res[3])
+						p.PayType = string(res[1])
+						p.PayStatus = "callback_" + string(res[2])
+						p.ChannelId = string(res[4])
+						p.Money = helper.Round(string(res[5]), 2)
+						p.GoodId = string(res[6])
+					}
+				}
+				if len(res) > 0 {
+
 				}
 			}
 		} else {
@@ -301,7 +335,7 @@ func IncreasePhpLineNumber() int64 {
 func ParseUrl(urlStr string) (*url.URL, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
-		L.Debug("url parse error"+err.Error()+",url:"+urlStr, LEVEL_ERROR)
+		L.Debug("url parse error"+err.Error()+",url:"+urlStr, LEVEL_NOTICE)
 		if strings.Contains(urlStr, "%!") {
 			L.Debug("url parse save"+",url:"+urlStr, LEVEL_INFO)
 			urlSplit := strings.Split(urlStr, "%!")

@@ -8,7 +8,7 @@
       "on": true,
       "continue": true,
       "index": "log-php-test",
-      "pick": "cookie,get"
+      "pick": "cookie,get,order"
     },
     {
       "dir": "/usr/local/openresty/nginx/logs/",

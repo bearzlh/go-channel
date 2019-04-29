@@ -39,6 +39,13 @@ type PhpMsg struct {
 	Operator string `json:"operator"`
 	Access   string `json:"access"`
 
+	//订单参数
+	PayId     string  `json:"pay_id"`
+	PayType   string  `json:"pay_type"`   //wechatpay,mihua...
+	PayStatus string  `json:"pay_status"` //create_success,create_fail,callback
+	GoodId    string  `json:"good_id"`
+	Money     float64 `json:"money"`
+
 	//日志内容
 	Message []Content `json:"message"`
 }
