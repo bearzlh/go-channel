@@ -51,9 +51,9 @@
     "host": "192.168.0.109:9200",
     "index_format": "Y.m.d",
     "retry": 5,
-    "concurrent_post": 20,
+    "concurrent_post": 10,
     "storage": "storage",
-    "recover_thread": 50
+    "recover_thread": 2
   },
   "version": "0.14",
   "appid": ""

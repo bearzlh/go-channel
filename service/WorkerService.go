@@ -102,7 +102,11 @@ func StartWork() {
 					if positionObj.File != "" {
 						TailNextFile(positionObj.File, item)
 					} else {
-						Log := GetLogFile(item, 0)
+						timeFrom := int64(0)
+						if Cf.Recover.From != "" {
+							timeFrom = helper.FormatTimeStamp(Cf.Recover.From, "")
+						}
+						Log := GetLogFile(item, timeFrom)
 						TailNextFile(Log, item)
 					}
 				}()
@@ -261,7 +265,9 @@ func InitWorkPool() {
 	if An.TimeStart == 0 {
 		An.TimeStart = time.Now().Unix()
 	}
-	CheckHostHealth()
+	if Cf.Recover.From == "" {
+		CheckHostHealth()
+	}
 	Lock = new(sync.Mutex)
 	MapLock = new(sync.Mutex)
 	LineMap = make(map[string]LineItem)
@@ -559,7 +565,11 @@ func GetNextFile(rp ReadPath, currentFile string) string {
 			resFile = nextFile
 			break
 		}
-		if nextTime > time.Now().Unix() {
+		endtime := time.Now().Unix()
+		if Cf.Recover.To == "" {
+			endtime = helper.FormatTimeStamp(Cf.Recover.To, "")
+		}
+		if nextTime > endtime {
 			break;
 		}
 	}

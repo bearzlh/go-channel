@@ -37,8 +37,15 @@ func ServiceInit() {
 	//初始化日志
 	service.GetLog()
 
-	//初始化统计信息
-	service.SetAnalysis()
+	//配置文件监控
+	service.Cf.ConfigWatch()
+
+	if service.Cf.Recover.From == "" {
+		//启动http服务
+		service.StartHttp()
+		//初始化统计信息
+		service.SetAnalysis()
+	}
 
 	//检测es是否可用
 	service.Es.Init()
@@ -46,13 +53,7 @@ func ServiceInit() {
 	//工作初始化
 	service.InitWorkPool()
 
-	//配置文件监控
-	service.Cf.ConfigWatch()
-
-	//启动http服务
-	service.StartHttp()
-
-	//启动日志监控
+	//启动日志收集
 	service.StartWork()
 }
 

@@ -7,8 +7,11 @@ import (
 )
 
 func GetPosition(file string) object.Position {
-	content, err := ioutil.ReadFile(file)
 	P := object.Position{}
+	if Cf.Recover.From != "" {
+		return P
+	}
+	content, err := ioutil.ReadFile(file)
 	if err != nil {
 		L.Debug("open position file err "+err.Error(), LEVEL_NOTICE)
 		return P

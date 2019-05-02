@@ -142,9 +142,21 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 	if firstLine {
 		s := helper.RegexpMatch(line, PhpFirstLineRegex)
 		if len(s) > 0 {
+			p.Date = helper.FormatTimeStamp(string(s[3]), "")
+			if Cf.Recover.From != "" {
+				fromTime := helper.FormatTimeStamp(Cf.Recover.From, "")
+				toTime := helper.FormatTimeStamp(Cf.Recover.To, "")
+				if p.Date < fromTime {
+					return
+				}
+				if p.Date > toTime {
+					L.Debug("暂存过期，程序退出", LEVEL_NOTICE)
+					StopSignal <- os.Interrupt
+					return
+				}
+			}
 			p.LogLine, _ = strconv.ParseInt(string(s[1]), 10, 64)
 			p.Xid = string(s[2])
-			p.Date = helper.FormatTimeStamp(string(s[3]), "")
 			p.Remote = string(s[4])
 			p.Method = string(s[5])
 			p.Url = strings.TrimSpace(string(s[6]))

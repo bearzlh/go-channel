@@ -53,6 +53,10 @@ type ConfigService struct {
 		PickInterval    int `json:"pick_interval"`
 		CheckInterval   int `json:"check_interval"`
 	} `json:"monitor"`
+	Recover struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"recover"`
 }
 
 type ReadPath struct {
