@@ -49,7 +49,7 @@ func PhpProcessLine(Rp ReadPath) {
 		Lock.Lock()
 		An.LineCount++
 		Lock.Unlock()
-		text := fmt.Sprintf("[%d] "+line.Text, phpLine)
+		text := fmt.Sprintf("[%d] ", phpLine) + line.Text
 		//记录当前id
 		currentId = PhpLineToJob(text, Rp.Type, currentId)
 		LineCount++
@@ -187,9 +187,14 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 				p.Uri = u.Path
 				p.DomainPort = u.Host
 			}
-			WechatMatch := helper.RegexpMatch(p.DomainPort, `^(wx\w+)\.`)
-			if len(WechatMatch) > 0 {
-				p.WechatAppId = string(WechatMatch[1])
+			WechatMatchDomain := helper.RegexpMatch(p.DomainPort, `^px-\w+-(\w+)-(\d+)-\w+\..*`)
+			if len(WechatMatchDomain) > 0 {
+				p.WechatAppId = string(WechatMatchDomain[1])
+				p.UserId = string(WechatMatchDomain[2])
+			}
+			WechatMatchUri := helper.RegexpMatch(p.Uri, `^/api/wechat/mpapi/appid/(\w+)`)
+			if len(WechatMatchUri) > 0 {
+				p.WechatAppId = string(WechatMatchUri[1])
 			}
 
 			p.HostName, _ = os.Hostname()
@@ -213,8 +218,8 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 
 			//添加cookie参数
 			if strings.Contains(readPath.Pick, "cookie") {
-				if Message.Content[0:3] == "OS:" && len(p.Uri) >= 6 {
-					if p.Uri[0:6] == "/index" {
+				if len(Message.Content) >= 3 && Message.Content[0:3] == "OS:" {
+					if (len(p.Uri) >= 6 && p.Uri[0:6] == "/index") || p.Uri == "/" {
 						res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
 						if len(res) > 0 {
 							p.Access = string(res[1])
@@ -222,13 +227,17 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 							p.Province = string(res[3])
 							p.City = string(res[4])
 							p.Operator = string(res[5])
-							p.UserId = string(res[6])
-							p.OpenId = string(res[7])
+							if string(res[6]) != "" {
+								p.UserId = string(res[6])
+							}
+							if string(res[7]) != "" {
+								p.OpenId = string(res[7])
+							}
 							p.ChannelId = string(res[8])
 							p.AgentId = string(res[9])
 						}
 					}
-					if p.Uri[0:6] == "/admin" {
+					if len(p.Uri) >= 6 && p.Uri[0:6] == "/admin" {
 						res := helper.RegexpMatch(Message.Content, PhpAdminCookie)
 						if len(res) > 0 {
 							p.Country = string(res[1])
@@ -267,14 +276,12 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 						p.GoodId = string(res[6])
 					}
 				}
-				if len(res) > 0 {
-
-				}
 			}
 
 			//采集用户信息
 			if strings.Contains(readPath.Pick, "user") {
-				if Message.Content[0:13] == "get_db_connect" {
+				keywords := "get_db_connect"
+				if len(Message.Content) >= len(keywords) && Message.Content[0:len(keywords)] == keywords {
 					res := helper.RegexpMatch(Message.Content, `get_db_connect table:(\w+) params:(\d+)`)
 					if len(res) > 0 {
 						tableName := string(res[1])

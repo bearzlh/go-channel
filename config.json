@@ -8,7 +8,7 @@
       "on": true,
       "continue": true,
       "index": "log-php-test",
-      "pick": "cookie,get,order"
+      "pick": "cookie,get,order,user"
     },
     {
       "dir": "/usr/local/openresty/nginx/logs/",
@@ -55,6 +55,6 @@
     "storage": "storage",
     "recover_thread": 2
   },
-  "version": "0.16",
+  "version": "0.17",
   "appid": ""
 }

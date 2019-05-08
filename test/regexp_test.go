@@ -1,7 +1,10 @@
 package test
 
 import (
+	"fmt"
+	"net/url"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 	"workerChannel/helper"
@@ -77,16 +80,17 @@ func TestCookie1(t *testing.T)  {
 }
 
 func TestDatabase(t *testing.T) {
-	//openid,recharge,user
-	msg := `get_db_connect table:user params:1908468`
-	regex := `get_db_connect table:(\w+) params:(\d+)`
-	res := helper.RegexpMatch(msg, regex)
-	if len(res) > 0 {
-		for _, item := range res {
-			t.Log(string(item))
+	msg := `get_db_connect table:user params:664785048`
+	if strings.Contains(service.Cf.ReadPath[0].Pick, "user") {
+		if len(msg) > 13 && msg[0:14] == "get_db_connect" {
+			res := helper.RegexpMatch(msg, `get_db_connect table:(\w+) params:(\d+)`)
+			if len(res) > 0 {
+				tableName := string(res[1])
+				if strings.Contains(service.UserTable, tableName) {
+					t.Log(string(res[2]))
+				}
+			}
 		}
-	} else {
-		t.Log(0)
 	}
 
 }
@@ -104,4 +108,43 @@ func TestOrder(t *testing.T) {
 	} else {
 		t.Log(0)
 	}
+}
+
+func TestDomainPort(t *testing.T) {
+	msg := `px-cb028-wx217270d72b4bffef-8311387-46633.yifengaq.cn:443`
+	regex := `^px-\w+-(\w+)-(\d+)-\w+\..*`
+	res := helper.RegexpMatch(msg, regex)
+	if len(res) > 0 {
+		for _, item := range res {
+			t.Log(string(item))
+		}
+	} else {
+		t.Log(0)
+	}
+}
+
+func TestUri(t *testing.T) {
+	msg := `/api/wechat/mpapi/appid/wx2472aed3807f6ae9`
+	regex := `^/api/wechat/mpapi/appid/(\w+)`
+	res := helper.RegexpMatch(msg, regex)
+	if len(res) > 0 {
+		for _, item := range res {
+			t.Log(string(item))
+		}
+	} else {
+		t.Log(0)
+	}
+}
+
+func TestFirstLine(t *testing.T) {
+	t.Log(url.PathUnescape("{%22mark%22:3202,%22push_time%22:1557115701,%22push_id%22:%2293%22,%22push_idx%22:1}"))
+	t.Log(fmt.Sprintf("%d{%22mark%22:3202,%22push_time%22:1557115701,%22push_id%22:%2293%22,%22push_idx%22:1}",1));
+	//res := helper.RegexpMatch(`[1] 3f7a72d13b859 [2019-05-08 13:37:02] 103.121.164.210 GET http://px-b15bc-wx7610e3344bdea6f6-20000093-8070e.dev.kpread.com:80/t/888?ext={%22mark%22:3202,%22push_time%22:1557115701,%22push_id%22:%2293%22,%22push_idx%22:1}`, service.PhpFirstLineRegex)
+	//if len(res) > 0 {
+	//	Url := strings.TrimSpace(string(res[6]))
+	//	u, _ := service.ParseUrl(Url)
+	//	t.Log(u.Query())
+	//} else {
+	//	t.Log(0)
+	//}
 }
