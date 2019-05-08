@@ -187,6 +187,10 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 				p.Uri = u.Path
 				p.DomainPort = u.Host
 			}
+			WechatMatchOld := helper.RegexpMatch(p.DomainPort, `^(wx\w+)\.`)
+			if len(WechatMatchOld) > 0 {
+				p.WechatAppId = string(WechatMatchOld[1])
+			}
 			WechatMatchDomain := helper.RegexpMatch(p.DomainPort, `^px-\w+-(\w+)-(\d+)-\w+\..*`)
 			if len(WechatMatchDomain) > 0 {
 				p.WechatAppId = string(WechatMatchDomain[1])
