@@ -26,6 +26,8 @@ type Analysis struct {
 	WorkerMap []*Worker `json:"worker_map"`
 
 	Cf *ConfigService `json:"cf"`
+
+	BackUpLine int64 `json:"back_up_line"`
 }
 
 type Worker struct {
@@ -124,6 +126,7 @@ func StartWork() {
 func StopWork() {
 	time.Sleep(time.Second * 3)
 	SaveRunTimeStatus()
+	IP.Stop()
 	for key, value := range Tail {
 		StopTailFile(value)
 		delete(Tail, key)
@@ -244,6 +247,7 @@ func InitFactory() {
 	LineMap = make(map[string]LineItem)
 	Tail = make(map[string]*tail.Tail)
 	SetWorker(Cf.Factory.WorkerInit)
+	IP.GetDB()
 	GetSleepTime()
 }
 
@@ -448,6 +452,7 @@ func GetAnalysis(host bool) []byte {
 
 	An.JobQueue = len(JobQueue)
 	An.PostCurrent = len(ConcurrentPost)
+	An.IpCurrent = len(IPCache)
 	An.BuckCount = int64(len(BuckDoc))
 	An.TimeStartStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeStart)
 	An.TimeEndStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeEnd)

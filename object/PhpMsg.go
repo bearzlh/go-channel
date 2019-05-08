@@ -46,6 +46,8 @@ type PhpMsg struct {
 	GoodId    string  `json:"good_id"`
 	Money     float64 `json:"money"`
 
+	Jingwei string `json:"jingwei"`
+
 	//日志内容
 	Message []Content `json:"message"`
 }

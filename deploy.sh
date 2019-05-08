@@ -43,6 +43,7 @@ if [ -d $backup ] ; then
 fi
 
 if [ -d $deploy_dir ] ; then
+    rm -rf /usr/local/postlog_*
     cp -r $deploy_dir $backup
 else
     mkdir -p $deploy_dir

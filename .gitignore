@@ -6,3 +6,4 @@ package
 .analysis
 hosts.txt
 package*
+GeoLite2-City.mmdb

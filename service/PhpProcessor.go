@@ -171,6 +171,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			p.LogLine, _ = strconv.ParseInt(string(s[1]), 10, 64)
 			p.Xid = string(s[2])
 			p.Remote = string(s[4])
+			p.Country, p.Province, p.City, p.Jingwei = IP.GetLocation(p.Remote)
 			p.Method = string(s[5])
 			p.Url = strings.TrimSpace(string(s[6]))
 			p.Timestamp = fmt.Sprintf("%d", time.Now().Unix())
@@ -227,9 +228,15 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 						res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
 						if len(res) > 0 {
 							p.Access = string(res[1])
-							p.Country = string(res[2])
-							p.Province = string(res[3])
-							p.City = string(res[4])
+							if p.Country == "" {
+								p.Country = string(res[2])
+							}
+							if p.Province == "" {
+								p.Province = string(res[3])
+							}
+							if p.City == "" {
+								p.City = string(res[4])
+							}
 							p.Operator = string(res[5])
 							if string(res[6]) != "" {
 								p.UserId = string(res[6])
