@@ -1,63 +1,39 @@
 package service
 
 import (
-	"io/ioutil"
+	"fmt"
+	"github.com/oschwald/geoip2-golang"
 	"net"
-	"net/http"
-	"os"
+	"workerChannel/helper"
 )
 
-type IpService struct {
-	InternalIp string
-	ExternalIp string
-}
+var DB *geoip2.Reader
 
-var Ip *IpService
-
-var chIp = make(chan bool, 1)
-
-func GetIp() *IpService {
-	chIp <- true
-	if Ip == nil {
-		Ip = &IpService{}
-		Ip.InternalIp = Ip.GetInternalIp()
-		Ip.ExternalIp = Ip.GetExternalIp()
-	}
-	<- chIp
-
-	return Ip
-}
-
-func (I *IpService) GetExternalIp() string {
-	resp, err := http.Get("http://myexternalip.com/raw")
-	if err != nil {
-		return ""
-	}
-	defer func() {
-		err := resp.Body.Close()
+func GetLocation(ip string) (string, string, string, string, string) {
+	var zhou, guo, sheng, shi, jingwei = "", "", "", "", ""
+	if DB == nil {
+		DB, err := geoip2.Open(helper.GetPathJoin(Cf.AppPath, "./GeoLite2-City.mmdb"))
 		if err != nil {
-			L.Debug(err.Error(), LEVEL_ERROR)
+			L.Debug("error to open mmdb", LEVEL_ERROR)
+			return zhou, guo, sheng, shi, jingwei
 		}
-	}()
-	content, _ := ioutil.ReadAll(resp.Body)
-	return string(content)
-}
-
-func (I *IpService) GetInternalIp() string {
-	address, err := net.InterfaceAddrs()
-
-	if err != nil {
-		L.Debug(err.Error(), LEVEL_ERROR)
-		os.Exit(1)
-	}
-
-	for _, address := range address {
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
-			}
+		// If you are using strings that may be invalid, check that ip is not nil
+		IP := net.ParseIP(ip)
+		record, err := DB.City(IP)
+		if err != nil {
+			L.Debug("error to parse ip"+ip, LEVEL_ERROR)
+			return zhou, guo, sheng, shi, jingwei
+		}
+		zhou = record.Continent.Names["zh-CN"]
+		guo = record.Country.Names["zh-CN"]
+		if len(record.Subdivisions) > 0 {
+			sheng = record.Subdivisions[0].Names["zh-CN"]
+		}
+		shi = record.City.Names["zh-CN"]
+		if record.Location.Latitude != 0 && record.Location.Longitude != 0 {
+			jingwei = fmt.Sprintf("%.4f,%.4f", record.Location.Latitude, record.Location.Longitude)
 		}
 	}
 
-	return ""
+	return zhou, guo, sheng, shi, jingwei
 }
