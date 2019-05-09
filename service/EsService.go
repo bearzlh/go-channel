@@ -139,11 +139,16 @@ func (E *EsService) CheckStorage() {
 
 				rd := bufio.NewReader(f)
 				dataPost := make([]string, 0)
-				count := 0
-				L.Debug("send loop start", LEVEL_INFO)
+				count := int64(0)
+				L.Debug(fmt.Sprintf("send loop start,backup line:%d", An.BackUpLine), LEVEL_INFO)
 				sending := make(chan bool, 1)
-				sengindLock := new(sync.Mutex)
+				sendingLock := new(sync.Mutex)
 				for {
+					Lock.Lock()
+					if count < An.BackUpLine {
+						continue
+					}
+					Lock.Unlock()
 					line, errRead := rd.ReadString('\n')
 					if line != "" {
 						count++
@@ -156,21 +161,25 @@ func (E *EsService) CheckStorage() {
 							L.Debug(fmt.Sprintf("线程数, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
 							dataPost = make([]string, 0)
 							go func() {
-								sengindLock.Lock()
+								sendingLock.Lock()
 								if len(sending) == 0 {
 									sending<-true
 								}
-								sengindLock.Unlock()
+								sendingLock.Unlock()
 								_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
 								if err != nil {
 									L.Debug("暂存数据存储错误"+err.Error(), LEVEL_ERROR)
 									E.SaveToStorage(postData)
+								} else {
+									Lock.Lock()
+									An.BackUpLine = count
+									Lock.Unlock()
 								}
-								sengindLock.Lock()
+								sendingLock.Lock()
 								if len(sending) != 0 {
 									<-sending
 								}
-								sengindLock.Unlock()
+								sendingLock.Unlock()
 								<-ThreadLimit
 							}()
 						}
@@ -180,21 +189,21 @@ func (E *EsService) CheckStorage() {
 								ThreadLimit<-1
 								L.Debug(fmt.Sprintf("线程数, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
 								go func() {
-									sengindLock.Lock()
+									sendingLock.Lock()
 									if len(sending) == 0 {
 										sending<-true
 									}
-									sengindLock.Unlock()
+									sendingLock.Unlock()
 									_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
 									if err != nil {
 										L.Debug("暂存数据存储错误"+err.Error(), LEVEL_ERROR)
 										E.SaveToStorage(postData)
 									}
-									sengindLock.Lock()
+									sendingLock.Lock()
 									if len(sending) != 0 {
 										<-sending
 									}
-									sengindLock.Unlock()
+									sendingLock.Unlock()
 									<-ThreadLimit
 								}()
 							}
@@ -209,6 +218,9 @@ func (E *EsService) CheckStorage() {
 				}
 				L.Debug("文件关闭"+f.Name(), LEVEL_INFO)
 				errRemove := os.Remove(fileName)
+				Lock.Lock()
+				An.BackUpLine = 0
+				Lock.Unlock()
 				if errRemove != nil {
 					L.Debug("文件删除失败"+fileName, LEVEL_ERROR)
 				}

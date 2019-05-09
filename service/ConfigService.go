@@ -34,6 +34,8 @@ type ConfigService struct {
 		BatchSize       int    `json:"batch_size"`
 		BatchTimeSecond int    `json:"batch_time_second"`
 		SendType        string `json:"send_type"`
+		IpCacheTime     int64  `json:"ip_cache_time"`
+		IpCheckInterval int64  `json:"ip_check_interval"`
 	} `json:"msg"`
 	PhpTimeWindow int64  `json:"php_time_window"`
 	AppPath       string `json:"app_path"`
@@ -128,6 +130,7 @@ func (C *ConfigService) ConfigWatch() {
 				L.outPut(ev.Op.String())
 				L.outPut("reload config file")
 				workCount := Cf.Factory.WorkerInit
+				postCount := Cf.Es.ConcurrentPost
 				buckStatus := Cf.Msg.IsBatch
 				onStatus := Cf.Factory.On
 				C.loadFile()
@@ -141,6 +144,10 @@ func (C *ConfigService) ConfigWatch() {
 						Cf.Factory.WorkerInit = Cf.Factory.WorkerMax
 					}
 					SetWorker(Cf.Factory.WorkerInit)
+				}
+
+				if postCount != Cf.Es.ConcurrentPost {
+					ConcurrentPost = make(chan int, Cf.Es.ConcurrentPost)
 				}
 
 				if onStatus != Cf.Factory.On {

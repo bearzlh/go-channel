@@ -23,7 +23,7 @@
   "env": "test",
   "log": {
     "path": "log",
-    "level": "info",
+    "level": "debug",
     "format_time": "Ym/d_H",
     "format_level": false
   },
@@ -36,7 +36,9 @@
     "is_batch": true,
     "batch_size": 100,
     "batch_time_second": 3,
-    "send_type": "es"
+    "send_type": "es",
+    "ip_cache_time": 600,
+    "ip_check_interval": 30
   },
   "monitor": {
     "cpu": 80,
@@ -55,6 +57,6 @@
     "storage": "storage",
     "recover_thread": 2
   },
-  "version": "0.17",
+  "version": "0.18",
   "appid": ""
 }
