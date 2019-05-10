@@ -36,7 +36,7 @@ func (I *IpService) GetDB() {
 
 //获取地域信息
 func (I *IpService) GetLocation(ip string) (string, string, string, string) {
-	var guo, sheng, shi, jingwei = "", "", "", ""
+	var guo, sheng, shi, jingwei = "", "", "", "0,0"
 	if I.DB == nil {
 		I.GetDB()
 	}
