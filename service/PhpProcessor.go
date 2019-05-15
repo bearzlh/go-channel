@@ -15,14 +15,18 @@ import (
 	"workerChannel/object"
 )
 
-var phpLineNumber int64
 var phpLineLock sync.Mutex
 
-var phpPostLineNumber = int64(0)
 var phpPostLineLock sync.Mutex
 var LineTime float64
 var LineCount float64
 var UserTable = "openid recharge user"
+
+type PhpProcessor struct {
+	Rp                ReadPath
+	phpLineNumber     int64
+	phpPostLineNumber int64
+}
 
 const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
@@ -31,13 +35,11 @@ const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\w+)* gro
 const PhpOrder = `(\w+)_create_order_(\w+)!wxpay_id:(.*?),wxpay_name:.*?,mch_id:.*?,channel_id:(.*?),user_id:(.*?),money:(.*?),good_id:(.*?),out_trade_no:.*?`
 const PhpOrderCallback = `(\w+)_callback_(\w+)!wxpay_id:(.*?),channel_id:(.*?),money:(.*?),good_id:(.*?),.*?`
 
-var readPath ReadPath
-
-func PhpProcessLine(Rp ReadPath) {
+func (PP *PhpProcessor)PhpProcessLine() {
 	L.Debug("日志收集开始", LEVEL_INFO)
-	readPath = Rp
+	RpType := PP.Rp.Type
 	var currentId string
-	tail := Tail[Rp.Type]
+	tail := Tail[RpType]
 	LineCount = 0
 	LineTime = 0
 	for line := range tail.Lines {
@@ -46,13 +48,13 @@ func PhpProcessLine(Rp ReadPath) {
 		Lock.Unlock()
 		time.Sleep(time.Duration(sleepTime))
 		now := time.Now()
-		phpLine := IncreasePhpLineNumber()
+		phpLine := PP.IncreasePhpLineNumber()
 		Lock.Lock()
 		An.LineCount++
 		Lock.Unlock()
 		text := fmt.Sprintf("[%d] ", phpLine) + line.Text
 		//记录当前id
-		currentId = PhpLineToJob(text, Rp.Type, currentId)
+		currentId = PP.PhpLineToJob(text, RpType, currentId)
 		LineCount++
 		LineTime += float64(time.Now().Sub(now))
 		if !Cf.Factory.On {
@@ -86,7 +88,7 @@ func GetSleepTime() {
 }
 
 //为日志行分组
-func PhpLineToJob(text string, Type string, preId string) string {
+func (PP *PhpProcessor)PhpLineToJob(text string, Type string, preId string) string {
 	check := helper.RegexpMatch(text, `^\[\d+\] ([[:alnum:]]{13}) `)
 	id := ""
 
@@ -136,18 +138,18 @@ func CheckValid(msg *object.PhpMsg) bool {
 }
 
 //获取php消息对象
-func GetPhpMsg(lines []string, pm *object.PhpMsg) {
+func (PP *PhpProcessor)GetPhpMsg(lines []string, pm *object.PhpMsg) {
 	for index, data := range lines {
 		if index == 0 {
-			MsgAddContent(pm, data, true)
+			PP.MsgAddContent(pm, data, true)
 		} else {
-			MsgAddContent(pm, data, false)
+			PP.MsgAddContent(pm, data, false)
 		}
 	}
 }
 
 //初始化消息主体
-func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
+func (PP *PhpProcessor)MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 	if firstLine {
 		s := helper.RegexpMatch(line, PhpFirstLineRegex)
 		if len(s) > 0 {
@@ -181,7 +183,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 				L.Debug("url parse error"+err.Error()+",url:"+p.Url, LEVEL_ERROR)
 			}else{
 				//添加get参数
-				if strings.Contains(readPath.Pick, "get") {
+				if strings.Contains(PP.Rp.Pick, "get") {
 					if len(u.Query()) > 0 {
 						QueryProcess(u.Query(), p)
 					}
@@ -223,7 +225,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			p.Message = append(p.Message, Message)
 
 			//添加cookie参数
-			if strings.Contains(readPath.Pick, "cookie") {
+			if strings.Contains(PP.Rp.Pick, "cookie") {
 				if len(Message.Content) >= 3 && Message.Content[0:3] == "OS:" {
 					if (len(p.Uri) >= 6 && p.Uri[0:6] == "/index") || p.Uri == "/" {
 						res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
@@ -264,7 +266,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			}
 
 			//添加订单参数
-			if strings.Contains(readPath.Pick, "order") {
+			if strings.Contains(PP.Rp.Pick, "order") {
 				var res [][]byte
 				if strings.Contains(p.Uri, "/api/recharge/pay") {
 					res = helper.RegexpMatch(Message.Content, PhpOrder)
@@ -291,7 +293,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			}
 
 			//采集用户信息
-			if strings.Contains(readPath.Pick, "user") {
+			if strings.Contains(PP.Rp.Pick, "user") {
 				keywords := "get_db_connect"
 				if len(Message.Content) >= len(keywords) && Message.Content[0:len(keywords)] == keywords {
 					res := helper.RegexpMatch(Message.Content, `get_db_connect table:(\w+) params:(\d+)`)
@@ -305,7 +307,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			}
 
 			//采集微信回调信息
-			if strings.Contains(readPath.Pick, "wechat") {
+			if strings.Contains(PP.Rp.Pick, "wechat") {
 				keywords := `[ WeChat ] [ MP ] [ API ] Message: `
 				if strings.Contains(p.Uri, "/api/wechat/mpapi/appid/") && strings.Contains(Message.Content, keywords) {
 					list := strings.Split(Message.Content, keywords)
@@ -377,41 +379,41 @@ func GetPositionFile(logType string) string {
 }
 
 //设置php读取行
-func SetPhpLineNumber(line int64) int64 {
+func (PP *PhpProcessor)SetPhpLineNumber(line int64) int64 {
 	phpLineLock.Lock()
 	defer phpLineLock.Unlock()
-	phpLineNumber = line
-	return phpLineNumber
+	PP.phpLineNumber = line
+	return PP.phpLineNumber
 }
 
 //设置php发送行
-func SetPhpPostLineNumber(line int64, cover bool) int64 {
+func (PP *PhpProcessor)SetPhpPostLineNumber(line int64, cover bool) int64 {
 	phpPostLineLock.Lock()
 	defer phpPostLineLock.Unlock()
 	if cover {
-		phpPostLineNumber = line
+		PP.phpPostLineNumber = line
 	} else {
-		if line > phpPostLineNumber {
-			phpPostLineNumber = line
+		if line > PP.phpPostLineNumber {
+			PP.phpPostLineNumber = line
 		}
 	}
 
-	return phpPostLineNumber
+	return PP.phpPostLineNumber
 }
 
 //获取php发送行
-func GetPhpPostLineNumber() int64 {
+func (PP *PhpProcessor)GetPhpPostLineNumber() int64 {
 	phpPostLineLock.Lock()
 	defer phpPostLineLock.Unlock()
-	return phpPostLineNumber
+	return PP.phpPostLineNumber
 }
 
 //提高php读取行
-func IncreasePhpLineNumber() int64 {
+func (PP *PhpProcessor)IncreasePhpLineNumber() int64 {
 	phpLineLock.Lock()
 	defer phpLineLock.Unlock()
-	phpLineNumber++
-	return phpLineNumber
+	PP.phpLineNumber++
+	return PP.phpLineNumber
 }
 
 //解析url

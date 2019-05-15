@@ -51,6 +51,7 @@ var An Analysis
 var WorkPool *workerPool
 var JobQueue = make(chan string, 10000)
 var Tail map[string]*tail.Tail
+var PPList map[string]*PhpProcessor
 var Lock *sync.Mutex
 var MapLock *sync.Mutex
 var StopSignal = make(chan os.Signal)
@@ -172,23 +173,9 @@ func CheckHostHealth() {
 func (w *Worker) handleJob(jobId string) {
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	if item, ok := GetMap(jobId); ok {
-		if item.Type == "php" {
-			Msg := object.PhpMsg{}
-			GetPhpMsg(item.List, &Msg)
-			if CheckValid(&Msg) {
-				//批量发送
-				if Cf.Msg.IsBatch {
-					Es.BuckAdd(Msg)
-				} else {
-					Es.PostAdd(Msg)
-				}
-				L.Debug("content=>"+MsgToJson(Msg), LEVEL_DEBUG)
-			} else {
-				L.Debug("xid不存在", LEVEL_NOTICE)
-			}
-		} else {
-			Msg := object.NginxMsg{}
-			GetNginxMsg(item.List, &Msg)
+		Msg := object.PhpMsg{}
+		PPList[item.Type].GetPhpMsg(item.List, &Msg)
+		if CheckValid(&Msg) {
 			//批量发送
 			if Cf.Msg.IsBatch {
 				Es.BuckAdd(Msg)
@@ -196,6 +183,8 @@ func (w *Worker) handleJob(jobId string) {
 				Es.PostAdd(Msg)
 			}
 			L.Debug("content=>"+MsgToJson(Msg), LEVEL_DEBUG)
+		} else {
+			L.Debug("xid不存在", LEVEL_NOTICE)
 		}
 
 		Lock.Lock()
@@ -283,21 +272,12 @@ func SetWorker(n int) {
 //读取下一个文件
 func TailNextFile(FileName string, Rp ReadPath) {
 	L.Debug("check "+Rp.Type, LEVEL_NOTICE)
-	f := PhpProcessLine
-	switch Rp.Type {
-	case "php":
-		f = PhpProcessLine
-		break
-	case "nginx":
-		f = NginxProcessLine
-		break
-	}
 	if Tail[Rp.Type] != nil && Tail[Rp.Type].Filename != "" {
 		if Tail[Rp.Type].Filename != FileName {
 			L.Debug("file changed:"+Tail[Rp.Type].Filename+"->"+FileName, LEVEL_NOTICE)
 			StopTailFile(Tail[Rp.Type])
 			go func() {
-				TailFile(FileName, Rp, f)
+				TailFile(FileName, Rp)
 			}()
 		} else {
 			L.Debug("file not changed", LEVEL_DEBUG)
@@ -305,7 +285,7 @@ func TailNextFile(FileName string, Rp ReadPath) {
 	} else {
 		go func() {
 			L.Debug("file init->"+FileName, LEVEL_NOTICE)
-			TailFile(FileName, Rp, f)
+			TailFile(FileName, Rp)
 		}()
 	}
 }
@@ -320,7 +300,8 @@ func StopTailFile(tail *tail.Tail) {
 }
 
 //执行查询
-func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
+func TailFile(FileName string, Rp ReadPath) {
+	PPList[Rp.Type] = new(PhpProcessor{Rp, int64(0), int64(0)})
 	L.Debug("current_file=>"+FileName, LEVEL_INFO)
 	whence := io.SeekCurrent
 	var position, currentLine int64 = 0, 0
@@ -339,8 +320,8 @@ func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
 
 	if Rp.Type == "php" {
 		L.Debug(fmt.Sprintf("get php line %d", currentLine), LEVEL_INFO)
-		SetPhpLineNumber(currentLine)
-		SetPhpPostLineNumber(currentLine, true)
+		PPList[Rp.Type].SetPhpLineNumber(currentLine)
+		PPList[Rp.Type].SetPhpPostLineNumber(currentLine, true)
 	} else {
 		L.Debug(fmt.Sprintf("get nginx line %d", currentLine), LEVEL_INFO)
 		SetNginxLineNumber(currentLine)
@@ -356,8 +337,7 @@ func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
 	Lock.Lock()
 	Tail[Rp.Type] = tailFile
 	Lock.Unlock()
-
-	f(Rp)
+	PPList[Rp.Type].PhpProcessLine()
 }
 
 func GetLogFile(logType ReadPath, time int64) string {
@@ -562,12 +542,11 @@ func SaveRunTimeStatus() {
 	for _, rp := range Cf.ReadPath {
 		file := GetPositionFile(rp.Type)
 		oTail := Tail[rp.Type]
+		PP := PPList[rp.Type]
 		if oTail != nil {
 			var line int64
 			if rp.Type == "php" {
-				line = GetPhpPostLineNumber()
-			} else {
-				line = GetNginxPostLineNumber()
+				line = PP.GetPhpPostLineNumber()
 			}
 			P := object.Position{File: oTail.Filename, Line: line}
 			L.Debug(fmt.Sprintf("runtime status save,line +%d", line), LEVEL_INFO)
