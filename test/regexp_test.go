@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -147,4 +148,20 @@ func TestFirstLine(t *testing.T) {
 	//} else {
 	//	t.Log(0)
 	//}
+}
+
+func TestWechatMsg(t *testing.T) {
+	msg := `time:[ 2019-05-14 13:46:55 ]\tpid:[ 17256 ]\t[ WeChat ] [ MP ] [ API ] Message: `
+	split_str := `[ WeChat ] [ MP ] [ API ] Message: `
+	if strings.Contains(msg, split_str) {
+		list := strings.Split(msg, split_str)
+		wechatString := strings.Replace(list[1], `\"`, `"`, 100)
+		WechatMsg := new(object.WechatMsg)
+		t.Log(wechatString)
+		err := json.Unmarshal([]byte(wechatString), WechatMsg)
+		if err != nil {
+			t.Log(err.Error())
+		}
+		t.Log(WechatMsg)
+	}
 }

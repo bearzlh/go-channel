@@ -50,6 +50,8 @@ type PhpMsg struct {
 
 	//日志内容
 	Message []Content `json:"message"`
+
+	WechatMsg *WechatMsg `json:"wechat_msg"`
 }
 
 type Query struct {
