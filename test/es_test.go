@@ -2,9 +2,11 @@ package test
 
 import (
 	"encoding/json"
-	"net/http"
+	"github.com/bitly/go-simplejson"
 	"testing"
+	"time"
 	"workerChannel/object"
+	"workerChannel/service"
 )
 
 func TestTrimEmpty(t *testing.T) {
@@ -19,8 +21,16 @@ func TestTrimEmpty(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T)  {
-	_, err := http.Get("http://127.0.0.1:111")
-	t.Log(err)
+	indexName := object.GetIndex(service.Cf.Env, service.Cf.Es.IndexFormat, time.Now().Unix(), "php")
+	url := "http://"+service.Es.GetHost()+"/"+indexName+"/_settings"
+	content, _ := service.Es.GetData(url)
+	jsonContent,_ := simplejson.NewJson([]byte(content))
+	blocks, _:=jsonContent.GetPath("log-php-2019.04.28", "settings", "index", "blocks").Map()
+	if data, ok := blocks["read_only_allow_delete"]; ok && data == "true" {
+		t.Log("blocked")
+	} else {
+		t.Log("success")
+	}
 }
 
 func TestResponse(t *testing.T) {

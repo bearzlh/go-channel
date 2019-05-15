@@ -1,8 +1,7 @@
 package test
 
 import (
-	"fmt"
-	"net/url"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -137,8 +136,6 @@ func TestUri(t *testing.T) {
 }
 
 func TestFirstLine(t *testing.T) {
-	t.Log(url.PathUnescape("{%22mark%22:3202,%22push_time%22:1557115701,%22push_id%22:%2293%22,%22push_idx%22:1}"))
-	t.Log(fmt.Sprintf("%d{%22mark%22:3202,%22push_time%22:1557115701,%22push_id%22:%2293%22,%22push_idx%22:1}",1));
 	//res := helper.RegexpMatch(`[1] 3f7a72d13b859 [2019-05-08 13:37:02] 103.121.164.210 GET http://px-b15bc-wx7610e3344bdea6f6-20000093-8070e.dev.kpread.com:80/t/888?ext={%22mark%22:3202,%22push_time%22:1557115701,%22push_id%22:%2293%22,%22push_idx%22:1}`, service.PhpFirstLineRegex)
 	//if len(res) > 0 {
 	//	Url := strings.TrimSpace(string(res[6]))
@@ -147,4 +144,20 @@ func TestFirstLine(t *testing.T) {
 	//} else {
 	//	t.Log(0)
 	//}
+}
+
+func TestWechatMsg(t *testing.T) {
+	msg := `time:[ 2019-05-14 13:46:55 ]\tpid:[ 17256 ]\t[ WeChat ] [ MP ] [ API ] Message: `
+	split_str := `[ WeChat ] [ MP ] [ API ] Message: `
+	if strings.Contains(msg, split_str) {
+		list := strings.Split(msg, split_str)
+		wechatString := strings.Replace(list[1], `\"`, `"`, 100)
+		WechatMsg := new(object.WechatMsg)
+		t.Log(wechatString)
+		err := json.Unmarshal([]byte(wechatString), WechatMsg)
+		if err != nil {
+			t.Log(err.Error())
+		}
+		t.Log(WechatMsg)
+	}
 }

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"mq/service"
 	"net/http"
 	"os/exec"
 	"workerChannel/helper"
@@ -20,7 +19,7 @@ func StartHttp() {
 			L.Debug("status page,listen "+Cf.ServerPort, LEVEL_INFO)
 			err := http.ListenAndServe(Cf.ServerPort, nil)
 			if err != nil {
-				service.L.Debug(err.Error(), service.LEVEL_ERROR)
+				L.Debug(err.Error(), LEVEL_ERROR)
 			}
 		}()
 	}

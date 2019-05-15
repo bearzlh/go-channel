@@ -42,9 +42,9 @@ func (E *EsService) Init() {
 		//单条数据发送
 		E.Post()
 		//检测暂存
-		E.CheckStorage()
 		ConcurrentPost = make(chan int, Cf.Es.ConcurrentPost)
 		ThreadLimit = make(chan int, Cf.Es.RecoverThread)
+		E.CheckStorage()
 	}
 	//检测批量发送队列
 	Es.BuckWatch()
@@ -58,8 +58,11 @@ func (E *EsService) CheckEsCanAccess() {
 			select {
 			case <-t.C:
 				t.Reset(time.Second * 2)
-				_, err := E.GetData("http://" + E.GetHost())
-				if err == nil {
+				//indexName := object.GetIndex(Cf.Env, Cf.Es.IndexFormat, time.Now().Unix(), "php")
+				//url := "http://"+E.GetHost()+"/"+indexName+"/_settings"
+				//_, err := E.GetData(url)
+				allowIndex := AllowIndex()
+				if allowIndex {
 					if len(EsCanUse) == 1 {
 						L.Debug("es api recover", LEVEL_NOTICE)
 						<-EsCanUse
@@ -69,13 +72,36 @@ func (E *EsService) CheckEsCanAccess() {
 					}
 				} else {
 					if len(EsCanUse) == 0 {
-						L.Debug("es api error"+err.Error(), LEVEL_ERROR)
+						L.Debug("es api error", LEVEL_ERROR)
 						EsCanUse <- true
 					}
 				}
 			}
 		}
 	}()
+}
+
+//检查是否可以进行索引
+func AllowIndex() bool {
+	_, err := Es.GetData("http://" + Es.GetHost())
+	//接口不通
+	if err != nil {
+		L.Debug("es不可用", LEVEL_ERROR)
+		return false
+	}
+
+	indexName := object.GetIndex(Cf.Env, Cf.Es.IndexFormat, time.Now().Unix(), "php")
+	url := "http://" + Es.GetHost() + "/" + indexName + "/_settings"
+	content, _ := Es.GetData(url)
+	jsonContent, _ := simplejson.NewJson([]byte(content))
+	blocks, _ := jsonContent.GetPath(indexName, "settings", "index", "blocks").Map()
+	if data, ok := blocks["read_only_allow_delete"]; ok && data == "true" {
+		//只可删除，不可索引
+		return false
+	} else {
+		//可以进行索引
+		return true
+	}
 }
 
 //获取es地址
@@ -144,14 +170,15 @@ func (E *EsService) CheckStorage() {
 				sending := make(chan bool, 1)
 				sendingLock := new(sync.Mutex)
 				for {
-					Lock.Lock()
-					if count < An.BackUpLine {
-						continue
-					}
-					Lock.Unlock()
 					line, errRead := rd.ReadString('\n')
 					if line != "" {
 						count++
+						Lock.Lock()
+						if count < An.BackUpLine {
+							Lock.Unlock()
+							continue
+						}
+						Lock.Unlock()
 						dataPost = append(dataPost, line)
 					}
 					if count%2 == 0 {
@@ -258,6 +285,8 @@ func (E *EsService) SaveToStorage(content string) {
 	err := helper.FilePutContents(fileName, content, true)
 	if err != nil {
 		L.Debug("日志暂存失败"+err.Error(), LEVEL_ERROR)
+	} else {
+		L.Debug("暂存完成", LEVEL_INFO)
 	}
 }
 
@@ -296,14 +325,14 @@ func (E *EsService) ProcessBulk() (int64, string, string) {
 //php数据暂存
 func (E *EsService)PhpDataSave(phpLine int64, content string)  {
 	E.SaveToStorage(content)
-	Lock.Lock()
-	An.TimeEnd = time.Now().Unix()
-	Lock.Unlock()
 	SetPhpPostLineNumber(phpLine, false)
 }
 
 //发送批量数据
 func (E *EsService) BuckPost(phpLine int64, content string, jobs string) bool {
+	Lock.Lock()
+	An.TimeEnd = time.Now().Unix()
+	Lock.Unlock()
 	if Cf.Recover.From != "" {
 		L.Debug(fmt.Sprintf("数据恢复中,%d", phpLine), LEVEL_INFO)
 		E.PhpDataSave(phpLine, content)
@@ -336,7 +365,6 @@ func (E *EsService) BuckPost(phpLine int64, content string, jobs string) bool {
 	} else {
 		Lock.Lock()
 		An.JobSuccess += int64(len(content) / 2)
-		An.TimeEnd = time.Now().Unix()
 		Lock.Unlock()
 		SetPhpPostLineNumber(phpLine, false)
 		L.Debug(fmt.Sprintf("发送成功,%d,jobs-->"+jobs, phpLine), LEVEL_INFO)

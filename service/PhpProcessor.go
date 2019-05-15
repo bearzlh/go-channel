@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -299,6 +300,22 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 						if strings.Contains(UserTable, tableName) {
 							p.UserId = string(res[2])
 						}
+					}
+				}
+			}
+
+			//采集微信回调信息
+			if strings.Contains(readPath.Pick, "wechat") {
+				keywords := `[ WeChat ] [ MP ] [ API ] Message: `
+				if strings.Contains(p.Uri, "/api/wechat/mpapi/appid/") && strings.Contains(Message.Content, keywords) {
+					list := strings.Split(Message.Content, keywords)
+					wechatString := strings.Replace(list[1], `\"`, `"`, 100)
+					WechatMsg := new(object.WechatMsg)
+					err := json.Unmarshal([]byte(wechatString), WechatMsg)
+					if err != nil {
+						L.Debug("获取微信信息失败"+err.Error(), LEVEL_ERROR)
+					} else {
+						p.WechatMsg = WechatMsg
 					}
 				}
 			}

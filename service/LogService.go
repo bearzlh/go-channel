@@ -52,7 +52,7 @@ type LogService struct {
 var L *LogService
 
 func GetLog(config LogConfigInterface) {
-	L = &LogService{}
+	L = new(LogService)
 	L.Config = config
 }
 
