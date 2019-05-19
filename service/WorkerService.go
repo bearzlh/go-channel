@@ -453,7 +453,6 @@ func GetAnalysis(host bool) []byte {
 	An.JobQueue = len(JobQueue)
 	An.PostCurrent = len(ConcurrentPost)
 	An.IpCurrent = len(IPCache)
-	An.BuckCount = int64(len(BuckDoc))
 	An.TimeStartStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeStart)
 	An.TimeEndStr = helper.TimeFormat("Y-m-d H:i:s", An.TimeEnd)
 	if An.TimeEnd > 0 {

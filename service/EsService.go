@@ -238,27 +238,33 @@ func (E *EsService) CheckStorage() {
 						}
 					}
 				}
-				L.Debug(fmt.Sprintf("send loop end, 发送数据量:%d", count/2), LEVEL_INFO)
-				errClose := f.Close()
-				if errClose != nil {
-					L.Debug("文件关闭失败"+f.Name()+err.Error(), LEVEL_ERROR)
-				}
-				L.Debug("文件关闭"+f.Name(), LEVEL_INFO)
-				errRemove := os.Remove(fileName)
-				Lock.Lock()
-				An.BackUpLine = 0
-				Lock.Unlock()
-				if errRemove != nil {
-					L.Debug("文件删除失败"+fileName, LEVEL_ERROR)
-				}
-				L.Debug("文件删除"+f.Name(), LEVEL_INFO)
-				back := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, "back")
-				if helper.IsFile(back) {
-					errRename := os.Rename(back, fileName)
-					if errRename != nil {
-						L.Debug("文件重命名失败,from:"+back+" to:"+fileName, LEVEL_ERROR)
-					} else {
-						L.Debug("文件重命名,from:"+back+" to:"+fileName, LEVEL_INFO)
+				for {
+					time.Sleep(time.Second * 5)
+					if len(ThreadLimit) == 0 {
+						L.Debug(fmt.Sprintf("send loop end, 发送数据量:%d", count/2), LEVEL_INFO)
+						errClose := f.Close()
+						if errClose != nil {
+							L.Debug("文件关闭失败"+f.Name()+err.Error(), LEVEL_ERROR)
+						}
+						L.Debug("文件关闭"+f.Name(), LEVEL_INFO)
+						errRemove := os.Remove(fileName)
+						Lock.Lock()
+						An.BackUpLine = 0
+						Lock.Unlock()
+						if errRemove != nil {
+							L.Debug("文件删除失败"+fileName, LEVEL_ERROR)
+						}
+						L.Debug("文件删除"+f.Name(), LEVEL_INFO)
+						back := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, "back")
+						if helper.IsFile(back) {
+							errRename := os.Rename(back, fileName)
+							if errRename != nil {
+								L.Debug("文件重命名失败,from:"+back+" to:"+fileName, LEVEL_ERROR)
+							} else {
+								L.Debug("文件重命名,from:"+back+" to:"+fileName, LEVEL_INFO)
+							}
+						}
+						break
 					}
 				}
 			}
@@ -455,6 +461,9 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 					content = strings.Join(contentNew, "\n") + "\n"
 					err = errors.New("es请求错误")
 					continue
+				} else {
+					err = nil
+					break
 				}
 			}
 			break

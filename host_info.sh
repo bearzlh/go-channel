@@ -44,7 +44,7 @@ getCpu ()
     if [ $os == "Mac" ] ; then
         echo `top -c a -l 5|grep $keywords|awk '{print $3}'|tail -n 1`
     else
-        echo `top -b -n 1|grep $keywords|awk '{print $9}'`
+        echo `top -b -n 1|grep $keywords|awk '{print $9}'|sort -nr|head -n 1`
     fi   
 }	# ----------  end of function getCpu  ----------
 
@@ -59,7 +59,7 @@ getCpu ()
 getMem ()
 {
     if [ $os != "Mac" ] ; then
-        echo `top -b -n 1|grep $keywords|awk '{print $10}'`
+        echo `top -b -n 1|grep $keywords|awk '{print $10}'|sort -nr|head -n 1`
     fi
 }	# ----------  end of function getMem  ----------
 

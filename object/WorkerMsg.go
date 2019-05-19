@@ -13,7 +13,6 @@ type SystemAnalysis struct {
 	JobQueue      int   `json:"job_queue"`
 	JobProcessing int64 `json:"job_processing"`
 	JobSuccess    int64 `json:"job_success"`
-	BuckCount     int64 `json:"buck_count"`
 	PostCurrent   int   `json:"post_current"`
 	IpCurrent     int   `json:"ip_current"`
 
