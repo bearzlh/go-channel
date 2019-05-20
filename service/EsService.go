@@ -481,6 +481,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 			break
 		} else {
 			L.Debug("post error"+string(byteC), LEVEL_ERROR)
+			err = errors.New("es请求错误")
 		}
 	}
 	if err == nil {
