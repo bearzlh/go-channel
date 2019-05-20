@@ -341,11 +341,6 @@ func (E *EsService) ProcessBulk() (string, string) {
 	return strings.Join(bulkContent, "\n") + "\n", strings.Join(jobs, ",")
 }
 
-//php数据暂存
-func (E *EsService)PhpDataSave(content string)  {
-	E.SaveToStorage(content)
-}
-
 //发送批量数据
 func (E *EsService) BuckPost(content string, jobs string) bool {
 	EsRunning = time.Now().Unix()
@@ -354,32 +349,28 @@ func (E *EsService) BuckPost(content string, jobs string) bool {
 	Lock.Unlock()
 	if Cf.Recover.From != "" {
 		L.Debug("数据恢复中", LEVEL_INFO)
-		E.PhpDataSave(content)
+		E.SaveToStorage(content)
 		return false
 	}
 
 	if !Cf.Factory.On {
 		L.Debug("暂停数据发送", LEVEL_NOTICE)
-		E.PhpDataSave(content)
+		E.SaveToStorage(content)
 		return false
 	}
 	if len(EsCanUse) > 0 {
 		L.Debug("es不可用，进行暂存", LEVEL_INFO)
-		E.PhpDataSave(content)
+		E.SaveToStorage(content)
 		return false
 	}
 	url := "http://"+E.GetHost()+"/_bulk"
 	str, err := E.PostData(url, content)
 	if err != nil {
-		L.Debug("es发送错误，进行暂存", LEVEL_INFO)
-		E.PhpDataSave(content)
 		return false
 	}
 	jsonData, _ := simplejson.NewJson([]byte(str))
 	errorsGet, err := jsonData.Get("data").Get("errors").Bool()
 	if errorsGet {
-		L.Debug("es返回值错误，进行暂存"+err.Error(), LEVEL_INFO)
-		E.PhpDataSave(content)
 		return errorsGet
 	} else {
 		Lock.Lock()
@@ -415,14 +406,12 @@ func (E *EsService) Post() {
 				str, err := E.PostData(url, data)
 				if err != nil {
 					L.Debug("es发送错误，进行暂存"+err.Error(), LEVEL_ERROR)
-					E.SaveToStorage(data)
 					continue
 				}
 				jsonData, _ := simplejson.NewJson([]byte(str))
 				success, err := jsonData.Get("_shards").Get("successful").Int()
 				if success == 0 {
 					L.Debug("es返回值错误，进行暂存"+err.Error(), LEVEL_ERROR)
-					E.SaveToStorage(data)
 				}
 			}
 		}
@@ -487,6 +476,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 	if err == nil {
 		L.Debug("post success", LEVEL_NOTICE)
 	} else {
+		E.SaveToStorage(content)
 		L.Debug("post error"+err.Error(), LEVEL_NOTICE)
 	}
 	return string(byteC), err
