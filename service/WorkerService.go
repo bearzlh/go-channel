@@ -51,9 +51,11 @@ var An Analysis
 var WorkPool *workerPool
 var JobQueue = make(chan string, 10000)
 var Tail map[string]*tail.Tail
+var PPList = make(map[string]*Processor)
 var Lock *sync.Mutex
 var MapLock *sync.Mutex
 var StopSignal = make(chan os.Signal)
+var StopStatus = false
 
 var HostHealth bool
 
@@ -103,8 +105,8 @@ func StartWork() {
 									nextFile := GetNextFile(item, Tail[item.Type].Filename)
 									if nextFile != "" {
 										nowStamp := time.Now().Unix()
-										formatNow := helper.TimeFormat("Y-m-d H:i:s",nowStamp)
-										formatEnd := helper.TimeFormat("Y-m-d H:i:s",An.TimeEnd)
+										formatNow := helper.TimeFormat("Y-m-d H:i:s", nowStamp)
+										formatEnd := helper.TimeFormat("Y-m-d H:i:s", An.TimeEnd)
 										if nowStamp-An.TimeEnd > int64(Cf.Msg.BatchTimeSecond+3) {
 											L.Debug("日志切换生效->"+nextFile+":"+formatNow+"-"+formatEnd, LEVEL_INFO)
 											TailNextFile(nextFile, item)
@@ -124,13 +126,14 @@ func StartWork() {
 
 //停止日志读取
 func StopWork() {
-	time.Sleep(time.Second * 3)
+	StopStatus = true
+	time.Sleep(time.Second * 2)
 	SaveRunTimeStatus()
-	IP.Stop()
 	for key, value := range Tail {
 		StopTailFile(value)
 		delete(Tail, key)
 	}
+	IP.Stop()
 }
 
 //检测主机状态并发送统计信息
@@ -172,30 +175,15 @@ func CheckHostHealth() {
 func (w *Worker) handleJob(jobId string) {
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	if item, ok := GetMap(jobId); ok {
-		if item.Type == "php" {
-			Msg := object.PhpMsg{}
-			GetPhpMsg(item.List, &Msg)
-			if CheckValid(&Msg) {
-				//批量发送
-				if Cf.Msg.IsBatch {
-					Es.BuckAdd(Msg)
-				} else {
-					Es.PostAdd(Msg)
-				}
-				L.Debug("content=>"+MsgToJson(Msg), LEVEL_DEBUG)
-			} else {
-				L.Debug("xid不存在", LEVEL_NOTICE)
-			}
-		} else {
-			Msg := object.NginxMsg{}
-			GetNginxMsg(item.List, &Msg)
+		Msg := object.PhpMsg{}
+		PPList[item.Type].GetPhpMsg(item.List, &Msg)
+		if CheckValid(&Msg) {
 			//批量发送
-			if Cf.Msg.IsBatch {
-				Es.BuckAdd(Msg)
-			} else {
-				Es.PostAdd(Msg)
-			}
+			Es.BuckAdd(Msg)
+			PPList[item.Type].SetPhpLineNumber(Msg.LogLine)
 			L.Debug("content=>"+MsgToJson(Msg), LEVEL_DEBUG)
+		} else {
+			L.Debug("xid不存在", LEVEL_NOTICE)
 		}
 
 		Lock.Lock()
@@ -212,6 +200,10 @@ func (w *Worker) Start() {
 	go func() {
 		L.Debug(fmt.Sprintf("worker %s waiting", w.ID), LEVEL_NOTICE)
 		for {
+			if StopStatus {
+				L.Debug("worker stopped:"+w.ID, LEVEL_NOTICE)
+				return
+			}
 			select {
 			case jobID := <-JobQueue:
 				L.Debug(fmt.Sprintf("worker: %s, will handle job: %s", w.ID, jobID), LEVEL_DEBUG)
@@ -283,21 +275,12 @@ func SetWorker(n int) {
 //读取下一个文件
 func TailNextFile(FileName string, Rp ReadPath) {
 	L.Debug("check "+Rp.Type, LEVEL_NOTICE)
-	f := PhpProcessLine
-	switch Rp.Type {
-	case "php":
-		f = PhpProcessLine
-		break
-	case "nginx":
-		f = NginxProcessLine
-		break
-	}
 	if Tail[Rp.Type] != nil && Tail[Rp.Type].Filename != "" {
 		if Tail[Rp.Type].Filename != FileName {
 			L.Debug("file changed:"+Tail[Rp.Type].Filename+"->"+FileName, LEVEL_NOTICE)
 			StopTailFile(Tail[Rp.Type])
 			go func() {
-				TailFile(FileName, Rp, f)
+				TailFile(FileName, Rp)
 			}()
 		} else {
 			L.Debug("file not changed", LEVEL_DEBUG)
@@ -305,7 +288,7 @@ func TailNextFile(FileName string, Rp ReadPath) {
 	} else {
 		go func() {
 			L.Debug("file init->"+FileName, LEVEL_NOTICE)
-			TailFile(FileName, Rp, f)
+			TailFile(FileName, Rp)
 		}()
 	}
 }
@@ -320,7 +303,10 @@ func StopTailFile(tail *tail.Tail) {
 }
 
 //执行查询
-func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
+func TailFile(FileName string, Rp ReadPath) {
+	PPList[Rp.Type] = new(Processor)
+	PPList[Rp.Type].Rp = Rp
+	PPList[Rp.Type].phpLineNumber = int64(0)
 	L.Debug("current_file=>"+FileName, LEVEL_INFO)
 	whence := io.SeekCurrent
 	var position, currentLine int64 = 0, 0
@@ -337,15 +323,8 @@ func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
 		whence = io.SeekEnd
 	}
 
-	if Rp.Type == "php" {
-		L.Debug(fmt.Sprintf("get php line %d", currentLine), LEVEL_INFO)
-		SetPhpLineNumber(currentLine)
-		SetPhpPostLineNumber(currentLine, true)
-	} else {
-		L.Debug(fmt.Sprintf("get nginx line %d", currentLine), LEVEL_INFO)
-		SetNginxLineNumber(currentLine)
-		SetNginxPostLineNumber(currentLine, true)
-	}
+	L.Debug(fmt.Sprintf("get php line %d", currentLine), LEVEL_INFO)
+	PPList[Rp.Type].SetPhpLineNumber(currentLine)
 	seek := tail.SeekInfo{Offset: position, Whence: whence}
 	//获取文件流
 	tailFile, err := tail.TailFile(FileName, tail.Config{Follow: true, Location: &seek})
@@ -356,8 +335,7 @@ func TailFile(FileName string, Rp ReadPath, f func(ReadPath)) {
 	Lock.Lock()
 	Tail[Rp.Type] = tailFile
 	Lock.Unlock()
-
-	f(Rp)
+	PPList[Rp.Type].ProcessLine()
 }
 
 func GetLogFile(logType ReadPath, time int64) string {
@@ -412,7 +390,6 @@ func GetFileLineFromPosition(filePath string, fileLimit int64) int64 {
 
 //获取行所在位置
 func GetPositionFromFileLine(filePath string, fileLine int64) int64 {
-
 	if fileLine == 0 {
 		return 0
 	}
@@ -558,26 +535,32 @@ func ExitProgramme(s os.Signal) {
 
 //保存状态
 func SaveRunTimeStatus() {
-	for _, rp := range Cf.ReadPath {
-		file := GetPositionFile(rp.Type)
-		oTail := Tail[rp.Type]
-		if oTail != nil {
-			var line int64
-			if rp.Type == "php" {
-				line = GetPhpPostLineNumber()
-			} else {
-				line = GetNginxPostLineNumber()
-			}
-			P := object.Position{File: oTail.Filename, Line: line}
-			L.Debug(fmt.Sprintf("runtime status save,line +%d", line), LEVEL_INFO)
-			SetPosition(file, P)
-		}
-	}
+	for {
+		select {
+		case <-time.After(time.Millisecond * 1000):
+			L.Debug(fmt.Sprintf("SaveRunTimeStatus,%d,%d,%d", time.Now().Unix(), EsRunning, int64(Cf.Msg.BatchTimeSecond)), LEVEL_NOTICE)
+			if time.Now().Unix()-EsRunning > int64(Cf.Msg.BatchTimeSecond) {
+				for _, rp := range Cf.ReadPath {
+					file := GetPositionFile(rp.Type)
+					oTail := Tail[rp.Type]
+					PP := PPList[rp.Type]
+					L.Debug(file, LEVEL_DEBUG)
+					if oTail != nil {
+						line := PP.GetPhpLineNumber()
+						P := object.Position{File: oTail.Filename, Line: line}
+						L.Debug(fmt.Sprintf("runtime status save,line +%d", line), LEVEL_INFO)
+						SetPosition(file, P)
+					}
+				}
 
-	fileName := helper.GetPathJoin(Cf.AppPath, ".analysis")
-	content := string(GetAnalysis(false))
-	err := helper.FilePutContents(fileName, content, false)
-	if err != nil {
-		L.Debug("保存状态失败"+err.Error(), LEVEL_ERROR)
+				fileName := helper.GetPathJoin(Cf.AppPath, ".analysis")
+				content := string(GetAnalysis(false))
+				err := helper.FilePutContents(fileName, content, false)
+				if err != nil {
+					L.Debug("保存状态失败"+err.Error(), LEVEL_ERROR)
+				}
+				return
+			}
+		}
 	}
 }

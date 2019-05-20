@@ -20,7 +20,6 @@ type MsgInterface interface {
 	GetTimestamp() int64
 	GetPickTime() string
 	GetLogType() string
-	GetLogLine() int64
 	GetIndex(string, string, int64) string
 	GetIndexObj(string, string, int64) Index
 	GetName() string

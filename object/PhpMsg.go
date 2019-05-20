@@ -93,10 +93,6 @@ func (p PhpMsg) GetIndex(env string, format string, time int64) string {
 	return index + "/go"
 }
 
-func (p PhpMsg) GetLogLine() int64 {
-	return p.LogLine
-}
-
 func (p PhpMsg)GetJobId() string {
 	return p.Xid
 }

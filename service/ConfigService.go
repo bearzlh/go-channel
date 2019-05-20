@@ -70,6 +70,7 @@ type ReadPath struct {
 	On         bool   `json:"on"`
 	Continue   bool   `json:"continue"`
 	Pick       string `json:"pick"`
+	AppId      string `json:"appid"`
 }
 
 //全局

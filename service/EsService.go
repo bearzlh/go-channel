@@ -34,8 +34,10 @@ var EsCanUse = make(chan bool, 1)
 var Storage = make(chan bool, 1)
 var ConcurrentPost chan int
 var ThreadLimit chan int
+var EsRunning = int64(0)
 
 func (E *EsService) Init() {
+	EsRunning = time.Now().Unix()
 	if Cf.Recover.From == "" {
 		//es是否可用
 		E.CheckEsCanAccess()
@@ -92,9 +94,20 @@ func AllowIndex() bool {
 
 	indexName := object.GetIndex(Cf.Env, Cf.Es.IndexFormat, time.Now().Unix(), "php")
 	url := "http://" + Es.GetHost() + "/" + indexName + "/_settings"
-	content, _ := Es.GetData(url)
-	jsonContent, _ := simplejson.NewJson([]byte(content))
-	blocks, _ := jsonContent.GetPath(indexName, "settings", "index", "blocks").Map()
+	content, err := Es.GetData(url)
+	if err != nil {
+		L.Debug("es不可用,content:"+err.Error(), LEVEL_ERROR)
+		return false
+	}
+	jsonContent, err := simplejson.NewJson([]byte(content))
+	if err != nil {
+		L.Debug("es不可用,jsonContent:"+err.Error(), LEVEL_ERROR)
+		return false
+	}
+	blocks, err := jsonContent.GetPath(indexName, "settings", "index", "blocks").Map()
+	if err != nil {
+		return true
+	}
 	if data, ok := blocks["read_only_allow_delete"]; ok && data == "true" {
 		//只可删除，不可索引
 		return false
@@ -125,9 +138,9 @@ func (E *EsService) BuckWatch() {
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
 					L.Debug("time up to post", LEVEL_INFO)
-					phpLine, content, jobs := E.ProcessBulk()
+					content, jobs := E.ProcessBulk()
 					go func() {
-						Es.BuckPost(phpLine, content, jobs)
+						Es.BuckPost(content, jobs)
 					}()
 				} else {
 					L.Debug("timeout to post, nodata", LEVEL_DEBUG)
@@ -136,9 +149,9 @@ func (E *EsService) BuckWatch() {
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
 					L.Debug("size over to post", LEVEL_INFO)
-					phpLine, content, jobs := E.ProcessBulk()
+					content, jobs := E.ProcessBulk()
 					go func() {
-						Es.BuckPost(phpLine, content, jobs)
+						Es.BuckPost(content, jobs)
 					}()
 				}
 
@@ -151,6 +164,10 @@ func (E *EsService) BuckWatch() {
 func (E *EsService) CheckStorage() {
 	go func() {
 		for {
+			if StopStatus {
+				L.Debug("check storage stopped", LEVEL_NOTICE)
+				return
+			}
 			select {
 			case <-Storage:
 				fileName := helper.GetPathJoin(Cf.AppPath, Cf.Es.Storage, "data")
@@ -305,75 +322,70 @@ func (E *EsService) BuckAdd(msg object.MsgInterface) {
 }
 
 //组装批量数据
-func (E *EsService) ProcessBulk() (int64, string, string) {
+func (E *EsService) ProcessBulk() (string, string) {
 	bulkContent := make([]string, 0)
 	lenBulk := Cf.Msg.BatchSize
 	if len(BuckDoc) < Cf.Msg.BatchSize {
 		lenBulk = len(BuckDoc)
 	}
-	phpLine := int64(0)
 	jobs := make([]string, lenBulk)
 	for i := 0; i < lenBulk; i++ {
 		doc := <-BuckDoc
-		if doc.Content.GetLogLine() > phpLine {
-			phpLine = doc.Content.GetLogLine()
-		}
 		indexContent, _ := json.Marshal(doc.Index)
 		Content, _ := json.Marshal(doc.Content)
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
 		An.TimePostEnd = doc.Content.GetTimestamp()
 		jobs[i] = doc.Content.GetJobId()
 	}
-	L.Debug(fmt.Sprintf("组装数据,%d,%d", phpLine, len(bulkContent)), LEVEL_INFO)
-	return phpLine, strings.Join(bulkContent, "\n") + "\n", strings.Join(jobs, ",")
+	L.Debug(fmt.Sprintf("组装数据,%d", len(bulkContent)), LEVEL_INFO)
+	return strings.Join(bulkContent, "\n") + "\n", strings.Join(jobs, ",")
 }
 
 //php数据暂存
-func (E *EsService)PhpDataSave(phpLine int64, content string)  {
+func (E *EsService)PhpDataSave(content string)  {
 	E.SaveToStorage(content)
-	SetPhpPostLineNumber(phpLine, false)
 }
 
 //发送批量数据
-func (E *EsService) BuckPost(phpLine int64, content string, jobs string) bool {
+func (E *EsService) BuckPost(content string, jobs string) bool {
+	EsRunning = time.Now().Unix()
 	Lock.Lock()
 	An.TimeEnd = time.Now().Unix()
 	Lock.Unlock()
 	if Cf.Recover.From != "" {
-		L.Debug(fmt.Sprintf("数据恢复中,%d", phpLine), LEVEL_INFO)
-		E.PhpDataSave(phpLine, content)
+		L.Debug("数据恢复中", LEVEL_INFO)
+		E.PhpDataSave(content)
 		return false
 	}
 
 	if !Cf.Factory.On {
-		L.Debug(fmt.Sprintf("暂停数据发送,%d", phpLine), LEVEL_NOTICE)
-		E.PhpDataSave(phpLine, content)
+		L.Debug("暂停数据发送", LEVEL_NOTICE)
+		E.PhpDataSave(content)
 		return false
 	}
 	if len(EsCanUse) > 0 {
-		L.Debug(fmt.Sprintf("es不可用，进行暂存，%d", phpLine), LEVEL_INFO)
-		E.PhpDataSave(phpLine, content)
+		L.Debug("es不可用，进行暂存", LEVEL_INFO)
+		E.PhpDataSave(content)
 		return false
 	}
 	url := "http://"+E.GetHost()+"/_bulk"
 	str, err := E.PostData(url, content)
 	if err != nil {
-		L.Debug(fmt.Sprintf("es发送错误，进行暂存，%d", phpLine), LEVEL_INFO)
-		E.PhpDataSave(phpLine, content)
+		L.Debug("es发送错误，进行暂存", LEVEL_INFO)
+		E.PhpDataSave(content)
 		return false
 	}
 	jsonData, _ := simplejson.NewJson([]byte(str))
 	errorsGet, err := jsonData.Get("data").Get("errors").Bool()
 	if errorsGet {
-		L.Debug(fmt.Sprintf("es返回值错误，进行暂存，%d"+err.Error(), phpLine), LEVEL_INFO)
-		E.PhpDataSave(phpLine, content)
+		L.Debug("es返回值错误，进行暂存"+err.Error(), LEVEL_INFO)
+		E.PhpDataSave(content)
 		return errorsGet
 	} else {
 		Lock.Lock()
 		An.JobSuccess += int64(len(content) / 2)
 		Lock.Unlock()
-		SetPhpPostLineNumber(phpLine, false)
-		L.Debug(fmt.Sprintf("发送成功,%d,jobs-->"+jobs, phpLine), LEVEL_INFO)
+		L.Debug("发送成功,jobs-->"+jobs, LEVEL_INFO)
 		return true
 	}
 }
@@ -403,14 +415,14 @@ func (E *EsService) Post() {
 				str, err := E.PostData(url, data)
 				if err != nil {
 					L.Debug("es发送错误，进行暂存"+err.Error(), LEVEL_ERROR)
-					E.PostAdd(msg)
+					E.SaveToStorage(data)
 					continue
 				}
 				jsonData, _ := simplejson.NewJson([]byte(str))
 				success, err := jsonData.Get("_shards").Get("successful").Int()
 				if success == 0 {
 					L.Debug("es返回值错误，进行暂存"+err.Error(), LEVEL_ERROR)
-					E.PostAdd(msg)
+					E.SaveToStorage(data)
 				}
 			}
 		}

@@ -7,7 +7,17 @@
       "type": "php",
       "on": true,
       "continue": true,
-      "app_id": "",
+      "appid": "",
+      "pick": "cookie,get,order,user,wechat"
+    },
+    {
+      "dir": "/var/log/cpslog_back/",
+      "time_format": "Ym/d_H",
+      "suffix": ".log",
+      "type": "xd_php",
+      "on": true,
+      "continue": true,
+      "appid": "xd",
       "pick": "cookie,get,order,user,wechat"
     }
   ],
@@ -48,6 +58,6 @@
     "storage": "storage",
     "recover_thread": 2
   },
-  "version": "0.21",
+  "version": "0.22",
   "appid": ""
 }

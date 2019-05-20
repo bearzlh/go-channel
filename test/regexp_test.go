@@ -33,14 +33,6 @@ func TestAppId(t *testing.T) {
 	}
 }
 
-func TestJson(t *testing.T) {
-	nginxStr := `[100] 127.0.0.1 - - [09/Mar/2019:16:41:15 +0800] "www.dev.kpread.com:80" "GET /admin/auth/agent?ref=addtabs HTTP/1.1 status:302 cost:0.478 php:0.478 5" "http://www.dev.kpread.com/admin/templatemessage?ref=addtabs" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36" "-"127.0.0.1:9000`
-
-	NginxMsg := object.NginxMsg{}
-	service.ProcessNginxMsg(&NginxMsg, nginxStr)
-	t.Log(NginxMsg)
-}
-
 func TestPhp(t *testing.T) {
 	msg := `[1] 5c88bcfe25c75 [ info ] [ BEHAVIOR ] Run app\admin\behavior\AdminLog @app_end [ RunTime:0.020256s ]`
 	mlist := helper.RegexpMatch(msg, service.PhpMsgRegex)

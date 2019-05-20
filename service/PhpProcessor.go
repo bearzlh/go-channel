@@ -15,14 +15,22 @@ import (
 	"workerChannel/object"
 )
 
-var phpLineNumber int64
+type Processor struct {
+	Rp                ReadPath
+	phpLineNumber     int64
+}
+
 var phpLineLock sync.Mutex
 
-var phpPostLineNumber = int64(0)
-var phpPostLineLock sync.Mutex
 var LineTime float64
 var LineCount float64
 var UserTable = "openid recharge user"
+
+type PhpProcessor struct {
+	Rp                ReadPath
+	phpLineNumber     int64
+	phpPostLineNumber int64
+}
 
 const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD|OPTIONS|PUT|DELETE|TRACE|CONNECT) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
@@ -31,13 +39,10 @@ const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\w+)* gro
 const PhpOrder = `(\w+)_create_order_(\w+)!wxpay_id:(.*?),wxpay_name:.*?,mch_id:.*?,channel_id:(.*?),user_id:(.*?),money:(.*?),good_id:(.*?),out_trade_no:.*?`
 const PhpOrderCallback = `(\w+)_callback_(\w+)!wxpay_id:(.*?),channel_id:(.*?),money:(.*?),good_id:(.*?),.*?`
 
-var readPath ReadPath
-
-func PhpProcessLine(Rp ReadPath) {
-	L.Debug("日志收集开始", LEVEL_INFO)
-	readPath = Rp
+func (PP *Processor) ProcessLine() {
+	L.Debug("日志收集开始"+PP.Rp.Type, LEVEL_INFO)
 	var currentId string
-	tail := Tail[Rp.Type]
+	tail := Tail[PP.Rp.Type]
 	LineCount = 0
 	LineTime = 0
 	for line := range tail.Lines {
@@ -46,13 +51,13 @@ func PhpProcessLine(Rp ReadPath) {
 		Lock.Unlock()
 		time.Sleep(time.Duration(sleepTime))
 		now := time.Now()
-		phpLine := IncreasePhpLineNumber()
+		phpLine := PP.IncreaseLineNumber()
 		Lock.Lock()
 		An.LineCount++
 		Lock.Unlock()
 		text := fmt.Sprintf("[%d] ", phpLine) + line.Text
 		//记录当前id
-		currentId = PhpLineToJob(text, Rp.Type, currentId)
+		currentId = PP.LineToJob(text, currentId)
 		LineCount++
 		LineTime += float64(time.Now().Sub(now))
 		if !Cf.Factory.On {
@@ -86,7 +91,7 @@ func GetSleepTime() {
 }
 
 //为日志行分组
-func PhpLineToJob(text string, Type string, preId string) string {
+func (PP *Processor) LineToJob(text string, preId string) string {
 	check := helper.RegexpMatch(text, `^\[\d+\] ([[:alnum:]]{13}) `)
 	id := ""
 
@@ -97,7 +102,7 @@ func PhpLineToJob(text string, Type string, preId string) string {
 
 	//任务处理，并计时，规定时间后处理任务
 	if item, ok := GetMap(id); !ok && id != "" {
-		item = LineItem{Type, []string{text}}
+		item = LineItem{PP.Rp.Type, []string{text}}
 		SetMap(id, item)
 		go func(jobId string) {
 			select {
@@ -136,78 +141,76 @@ func CheckValid(msg *object.PhpMsg) bool {
 }
 
 //获取php消息对象
-func GetPhpMsg(lines []string, pm *object.PhpMsg) {
-	for index, data := range lines {
-		if index == 0 {
-			MsgAddContent(pm, data, true)
-		} else {
-			MsgAddContent(pm, data, false)
-		}
+func (PP *Processor)GetPhpMsg(lines []string, pm *object.PhpMsg) {
+	for _, data := range lines {
+		PP.MsgAddContent(pm, data)
 	}
 }
 
 //初始化消息主体
-func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
-	if firstLine {
-		s := helper.RegexpMatch(line, PhpFirstLineRegex)
-		if len(s) > 0 {
-			p.Date = helper.FormatTimeStamp(string(s[3]), "")
-			if Cf.Recover.From != "" {
-				fromTime := helper.FormatTimeStamp(Cf.Recover.From, "")
-				toTime := helper.FormatTimeStamp(Cf.Recover.To, "")
-				if p.Date < fromTime {
-					return
+func (PP *Processor)MsgAddContent(p *object.PhpMsg, line string) {
+	s := helper.RegexpMatch(line, PhpFirstLineRegex)
+	if len(s) > 0 {
+		p.Date = helper.FormatTimeStamp(string(s[3]), "")
+		if Cf.Recover.From != "" {
+			fromTime := helper.FormatTimeStamp(Cf.Recover.From, "")
+			toTime := helper.FormatTimeStamp(Cf.Recover.To, "")
+			if p.Date < fromTime {
+				return
+			}
+			if p.Date > toTime {
+				L.Debug("暂存过期，程序退出", LEVEL_NOTICE)
+				cmd := exec.Command("/bin/bash", "-c", "cp "+helper.GetPathJoin(Cf.AppPath, "storage/data") +" /usr/local/postlog/storage/")
+				_, err := cmd.Output()
+				if err != nil {
+					L.Debug(err.Error(), LEVEL_ERROR)
 				}
-				if p.Date > toTime {
-					L.Debug("暂存过期，程序退出", LEVEL_NOTICE)
-					cmd := exec.Command("/bin/bash", "-c", "cp "+helper.GetPathJoin(Cf.AppPath, "storage/data") +" /usr/local/postlog/storage/")
-					_, err := cmd.Output()
-					if err != nil {
-						L.Debug(err.Error(), LEVEL_ERROR)
-					}
-					StopSignal <- os.Interrupt
-					return
-				}
+				StopSignal <- os.Interrupt
+				return
 			}
-			p.LogLine, _ = strconv.ParseInt(string(s[1]), 10, 64)
-			p.Xid = string(s[2])
-			p.Remote = string(s[4])
-			p.Country, p.Province, p.City, p.Jingwei = IP.GetLocation(p.Remote)
-			p.Method = string(s[5])
-			p.Url = strings.TrimSpace(string(s[6]))
-			p.Timestamp = fmt.Sprintf("%d", time.Now().Unix())
-			u, err := ParseUrl(p.Url)
-			if err != nil {
-				L.Debug("url parse error"+err.Error()+",url:"+p.Url, LEVEL_ERROR)
-			}else{
-				//添加get参数
-				if strings.Contains(readPath.Pick, "get") {
-					if len(u.Query()) > 0 {
-						QueryProcess(u.Query(), p)
-					}
-				}
-				p.Uri = u.Path
-				p.DomainPort = u.Host
-			}
-			WechatMatchOld := helper.RegexpMatch(p.DomainPort, `^(wx\w+)\.`)
-			if len(WechatMatchOld) > 0 {
-				p.WechatAppId = string(WechatMatchOld[1])
-			}
-			WechatMatchDomain := helper.RegexpMatch(p.DomainPort, `^px-\w+-(\w+)-(\d+)-\w+\..*`)
-			if len(WechatMatchDomain) > 0 {
-				p.WechatAppId = string(WechatMatchDomain[1])
-				p.UserId = string(WechatMatchDomain[2])
-			}
-			WechatMatchUri := helper.RegexpMatch(p.Uri, `^/api/wechat/mpapi/appid/(\w+)`)
-			if len(WechatMatchUri) > 0 {
-				p.WechatAppId = string(WechatMatchUri[1])
-			}
-
-			p.HostName, _ = os.Hostname()
-			p.AppId = GetAppIdFromHostName(p.HostName)
-			p.Tag = "php." + p.AppId + ".info"
-			p.LogType = "info"
 		}
+		p.LogLine, _ = strconv.ParseInt(string(s[1]), 10, 64)
+		p.Xid = string(s[2])
+		p.Remote = string(s[4])
+		p.Country, p.Province, p.City, p.Jingwei = IP.GetLocation(p.Remote)
+		p.Method = string(s[5])
+		p.Url = strings.TrimSpace(string(s[6]))
+		p.Timestamp = fmt.Sprintf("%d", time.Now().Unix())
+		u, err := ParseUrl(p.Url)
+		if err != nil {
+			L.Debug("url parse error"+err.Error()+",url:"+p.Url, LEVEL_ERROR)
+		}else{
+			//添加get参数
+			if strings.Contains(PP.Rp.Pick, "get") {
+				if len(u.Query()) > 0 {
+					QueryProcess(u.Query(), p)
+				}
+			}
+			p.Uri = u.Path
+			p.DomainPort = u.Host
+		}
+		WechatMatchOld := helper.RegexpMatch(p.DomainPort, `^(wx\w+)\.`)
+		if len(WechatMatchOld) > 0 {
+			p.WechatAppId = string(WechatMatchOld[1])
+		}
+		WechatMatchDomain := helper.RegexpMatch(p.DomainPort, `^px-\w+-(\w+)-(\d+)-\w+\..*`)
+		if len(WechatMatchDomain) > 0 {
+			p.WechatAppId = string(WechatMatchDomain[1])
+			p.UserId = string(WechatMatchDomain[2])
+		}
+		WechatMatchUri := helper.RegexpMatch(p.Uri, `^/api/wechat/mpapi/appid/(\w+)`)
+		if len(WechatMatchUri) > 0 {
+			p.WechatAppId = string(WechatMatchUri[1])
+		}
+
+		p.HostName, _ = os.Hostname()
+		if PP.Rp.AppId != "" {
+			p.AppId = PP.Rp.AppId
+		} else {
+			p.AppId = GetAppIdFromHostName(p.HostName)
+		}
+		p.Tag = "php." + p.AppId + ".info"
+		p.LogType = "info"
 	} else {
 		MatchMessage := helper.RegexpMatch(line, PhpMsgRegex)
 		if len(MatchMessage) > 0 {
@@ -223,7 +226,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			p.Message = append(p.Message, Message)
 
 			//添加cookie参数
-			if strings.Contains(readPath.Pick, "cookie") {
+			if strings.Contains(PP.Rp.Pick, "cookie") {
 				if len(Message.Content) >= 3 && Message.Content[0:3] == "OS:" {
 					if (len(p.Uri) >= 6 && p.Uri[0:6] == "/index") || p.Uri == "/" {
 						res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
@@ -264,7 +267,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			}
 
 			//添加订单参数
-			if strings.Contains(readPath.Pick, "order") {
+			if strings.Contains(PP.Rp.Pick, "order") {
 				var res [][]byte
 				if strings.Contains(p.Uri, "/api/recharge/pay") {
 					res = helper.RegexpMatch(Message.Content, PhpOrder)
@@ -291,7 +294,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			}
 
 			//采集用户信息
-			if strings.Contains(readPath.Pick, "user") {
+			if strings.Contains(PP.Rp.Pick, "user") {
 				keywords := "get_db_connect"
 				if len(Message.Content) >= len(keywords) && Message.Content[0:len(keywords)] == keywords {
 					res := helper.RegexpMatch(Message.Content, `get_db_connect table:(\w+) params:(\d+)`)
@@ -305,7 +308,7 @@ func MsgAddContent(p *object.PhpMsg, line string, firstLine bool) {
 			}
 
 			//采集微信回调信息
-			if strings.Contains(readPath.Pick, "wechat") {
+			if strings.Contains(PP.Rp.Pick, "wechat") {
 				keywords := `[ WeChat ] [ MP ] [ API ] Message: `
 				if strings.Contains(p.Uri, "/api/wechat/mpapi/appid/") && strings.Contains(Message.Content, keywords) {
 					list := strings.Split(Message.Content, keywords)
@@ -377,41 +380,26 @@ func GetPositionFile(logType string) string {
 }
 
 //设置php读取行
-func SetPhpLineNumber(line int64) int64 {
+func (PP *Processor)SetPhpLineNumber(line int64) int64 {
 	phpLineLock.Lock()
 	defer phpLineLock.Unlock()
-	phpLineNumber = line
-	return phpLineNumber
+	PP.phpLineNumber = line
+	return PP.phpLineNumber
 }
 
-//设置php发送行
-func SetPhpPostLineNumber(line int64, cover bool) int64 {
-	phpPostLineLock.Lock()
-	defer phpPostLineLock.Unlock()
-	if cover {
-		phpPostLineNumber = line
-	} else {
-		if line > phpPostLineNumber {
-			phpPostLineNumber = line
-		}
-	}
-
-	return phpPostLineNumber
-}
-
-//获取php发送行
-func GetPhpPostLineNumber() int64 {
-	phpPostLineLock.Lock()
-	defer phpPostLineLock.Unlock()
-	return phpPostLineNumber
+//设置php读取行
+func (PP *Processor)GetPhpLineNumber() int64 {
+	phpLineLock.Lock()
+	defer phpLineLock.Unlock()
+	return PP.phpLineNumber
 }
 
 //提高php读取行
-func IncreasePhpLineNumber() int64 {
+func (PP *Processor) IncreaseLineNumber() int64 {
 	phpLineLock.Lock()
 	defer phpLineLock.Unlock()
-	phpLineNumber++
-	return phpLineNumber
+	PP.phpLineNumber++
+	return PP.phpLineNumber
 }
 
 //解析url
