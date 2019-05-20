@@ -487,7 +487,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 	if err == nil {
 		L.Debug("post success", LEVEL_NOTICE)
 	} else {
-		L.Debug("post success"+err.Error(), LEVEL_NOTICE)
+		L.Debug("post error"+err.Error(), LEVEL_NOTICE)
 	}
 	return string(byteC), err
 }
