@@ -146,22 +146,31 @@ func (E *EsService) BuckWatch() {
 					L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 				}
 			case <-BuckFull:
-				if len(BuckFull) == 0 {
-					BuckFull <- true
-				}
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
-				if len(BuckDoc) > 0 {
-					L.Debug("size over to post", LEVEL_INFO)
-					content, jobs := E.ProcessBulk()
-					<-BuckFull
-					go func() {
-						Es.BuckPost(content, jobs)
-					}()
-				}
-
+				BuckFull <- true
+				L.Debug("size over to post", LEVEL_INFO)
+				content, jobs := E.ProcessBulk()
+				<-BuckFull
+				go func() {
+					Es.BuckPost(content, jobs)
+				}()
 			}
 		}
 	}()
+}
+
+//检查队列长度
+func (E *EsService) CheckBuck() {
+	t := time.NewTimer(time.Millisecond * 100)
+	for {
+		select {
+		case <-t.C:
+			t.Reset(time.Millisecond * 100)
+			if len(BuckDoc) > Cf.Msg.BatchSize {
+				BuckFull <- true
+			}
+		}
+	}
 }
 
 //检查暂存
@@ -313,9 +322,6 @@ func (E *EsService) SaveToStorage(content string) {
 //添加数据
 func (E *EsService) BuckAdd(msg object.MsgInterface) {
 	BuckDoc <- object.Doc{Index: msg.GetIndexObj(Cf.Env, Cf.Es.IndexFormat, msg.GetTimestamp()), Content: msg}
-	if len(BuckDoc) > Cf.Msg.BatchSize && len(BuckFull) == 0 {
-		BuckFull <- true
-	}
 }
 
 //组装批量数据
