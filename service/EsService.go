@@ -183,19 +183,16 @@ func (E *EsService) CheckStorage() {
 				rd := bufio.NewReader(f)
 				dataPost := make([]string, 0)
 				count := int64(0)
-				L.Debug(fmt.Sprintf("send loop start,backup line:%d", An.BackUpLine), LEVEL_INFO)
+				L.Debug(fmt.Sprintf("send loop start,backup line:%d", object.BackUpLine), LEVEL_INFO)
 				sending := make(chan bool, 1)
 				sendingLock := new(sync.Mutex)
 				for {
 					line, errRead := rd.ReadString('\n')
 					if line != "" {
 						count++
-						Lock.Lock()
-						if count < An.BackUpLine {
-							Lock.Unlock()
+						if count < object.BackUpLine {
 							continue
 						}
-						Lock.Unlock()
 						dataPost = append(dataPost, line)
 					}
 					if count%2 == 0 {
@@ -215,9 +212,7 @@ func (E *EsService) CheckStorage() {
 									L.Debug("暂存数据存储错误"+err.Error(), LEVEL_ERROR)
 									E.SaveToStorage(postData)
 								} else {
-									Lock.Lock()
-									An.BackUpLine = count
-									Lock.Unlock()
+									object.BackUpLine = count
 								}
 								sendingLock.Lock()
 								if len(sending) != 0 {
@@ -265,9 +260,7 @@ func (E *EsService) CheckStorage() {
 						}
 						L.Debug("文件关闭"+f.Name(), LEVEL_INFO)
 						errRemove := os.Remove(fileName)
-						Lock.Lock()
-						An.BackUpLine = 0
-						Lock.Unlock()
+						object.BackUpLine = 0
 						if errRemove != nil {
 							L.Debug("文件删除失败"+fileName, LEVEL_ERROR)
 						}
@@ -334,7 +327,7 @@ func (E *EsService) ProcessBulk() (string, string) {
 		indexContent, _ := json.Marshal(doc.Index)
 		Content, _ := json.Marshal(doc.Content)
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
-		An.TimePostEnd = doc.Content.GetTimestamp()
+		object.TimePostEnd = doc.Content.GetTimestamp()
 		jobs[i] = doc.Content.GetJobId()
 	}
 	L.Debug(fmt.Sprintf("组装数据,%d", len(bulkContent)), LEVEL_INFO)
@@ -344,9 +337,6 @@ func (E *EsService) ProcessBulk() (string, string) {
 //发送批量数据
 func (E *EsService) BuckPost(content string, jobs string) bool {
 	EsRunning = time.Now().Unix()
-	Lock.Lock()
-	An.TimeEnd = time.Now().Unix()
-	Lock.Unlock()
 	if Cf.Recover.From != "" {
 		L.Debug("数据恢复中", LEVEL_INFO)
 		E.SaveToStorage(content)
@@ -373,9 +363,7 @@ func (E *EsService) BuckPost(content string, jobs string) bool {
 	if errorsGet {
 		return errorsGet
 	} else {
-		Lock.Lock()
-		An.JobSuccess += int64(len(content) / 2)
-		Lock.Unlock()
+		object.JobSuccess += int64(len(content) / 2)
 		L.Debug("发送成功,jobs-->"+jobs, LEVEL_INFO)
 		return true
 	}

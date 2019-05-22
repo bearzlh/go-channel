@@ -32,7 +32,6 @@ func TestGeo(t *testing.T) {
 
 func TestPostGeo(t *testing.T) {
 	service.Es.Init()
-	service.Lock = new(sync.Mutex)
 	f, _ := os.Open("/Users/Bear/Desktop/doc.txt")
 	rd := bufio.NewReader(f)
 	for {

@@ -47,17 +47,14 @@ type LineItem struct {
 
 var LineMap map[string]LineItem
 
-var An Analysis
+var An = Analysis{}
 var WorkPool *workerPool
 var JobQueue = make(chan string, 10000)
-var Tail map[string]*tail.Tail
+var Tail = make(map[string]*tail.Tail)
 var PPList = make(map[string]*Processor)
-var Lock *sync.Mutex
-var MapLock *sync.Mutex
+var MapLock = new(sync.Mutex)
 var StopSignal = make(chan os.Signal)
 var StopStatus = false
-
-var HostHealth bool
 
 //启动日志监控
 func StartWork() {
@@ -86,7 +83,7 @@ func StartWork() {
 				}()
 
 				if item.TimeFormat != "" {
-					An.TimeEnd = time.Now().Unix()
+					object.TimeEnd = time.Now().Unix()
 					//定时检查是不是需要切换文件
 					go func(i int) {
 						t := time.NewTimer(time.Second * 3)
@@ -106,8 +103,8 @@ func StartWork() {
 									if nextFile != "" {
 										nowStamp := time.Now().Unix()
 										formatNow := helper.TimeFormat("Y-m-d H:i:s", nowStamp)
-										formatEnd := helper.TimeFormat("Y-m-d H:i:s", An.TimeEnd)
-										if nowStamp-An.TimeEnd > int64(Cf.Msg.BatchTimeSecond+3) {
+										formatEnd := helper.TimeFormat("Y-m-d H:i:s", object.TimeEnd)
+										if nowStamp-object.TimeEnd > int64(Cf.Msg.BatchTimeSecond+3) {
 											L.Debug("日志切换生效->"+nextFile+":"+formatNow+"-"+formatEnd, LEVEL_INFO)
 											TailNextFile(nextFile, item)
 										}
@@ -146,7 +143,7 @@ func CheckHostHealth() {
 			case <-TimeFive.C:
 				TimeFive.Reset(time.Second * time.Duration(Cf.Monitor.CheckInterval))
 				GetAnalysis(true)
-				if An.MemRate > Cf.Monitor.MemRestart {
+				if object.MemRate > Cf.Monitor.MemRestart {
 					L.Debug(fmt.Sprintf("内存使用率超过%f%%，进程重启", Cf.Monitor.MemRestart), LEVEL_NOTICE)
 					RestartCmd()
 				}
@@ -157,9 +154,7 @@ func CheckHostHealth() {
 				if err != nil {
 					L.Debug("统计信息解析失败"+err.Error(), LEVEL_ERROR)
 				} else {
-					Lock.Lock()
-					An.CodeCritical, An.CodeAlert, An.CodeError = 0, 0, 0
-					Lock.Unlock()
+					object.CodeCritical, object.CodeAlert, object.CodeError = 0, 0, 0
 					msg.HostName, _ = os.Hostname()
 					msg.AppId = GetAppIdFromHostName(msg.HostName)
 					msg.Date = time.Now().Unix()
@@ -186,9 +181,7 @@ func (w *Worker) handleJob(jobId string) {
 			L.Debug("xid不存在", LEVEL_NOTICE)
 		}
 
-		Lock.Lock()
-		An.JobProcessing--
-		Lock.Unlock()
+		object.JobProcessing--
 		DelMap(jobId)
 	} else {
 		L.Debug("job error,for id=>"+jobId, LEVEL_INFO)
@@ -234,12 +227,20 @@ func InitFactory() {
 		An.TimeStart = time.Now().Unix()
 	}
 	CheckHostHealth()
-	Lock = new(sync.Mutex)
-	MapLock = new(sync.Mutex)
 	LineMap = make(map[string]LineItem)
-	Tail = make(map[string]*tail.Tail)
 	SetWorker(Cf.Factory.WorkerInit)
 	IP.GetDB()
+	object.SleepTime = An.SleepTime
+
+	object.TimeStart = An.TimeStart
+	object.TimeEnd = An.TimeEnd
+	object.TimePostEnd = An.TimePostEnd
+	object.SleepTime = An.SleepTime
+	object.JobProcessing = An.JobProcessing
+	object.JobCount = An.JobCount
+	object.JobSuccess = An.JobSuccess
+	object.BackUpLine = An.BackUpLine
+
 	GetSleepTime()
 }
 
@@ -332,9 +333,7 @@ func TailFile(FileName string, Rp ReadPath) {
 		L.Debug(err.Error(), LEVEL_ERROR)
 		return
 	}
-	Lock.Lock()
 	Tail[Rp.Type] = tailFile
-	Lock.Unlock()
 	PPList[Rp.Type].ProcessLine()
 }
 
@@ -426,6 +425,17 @@ func GetAnalysis(host bool) []byte {
 	if WorkPool != nil {
 		An.WorkerMap = WorkPool.WorkerList
 	}
+	An.TimeStart = object.TimeStart
+	An.TimeEnd = object.TimeEnd
+	An.TimePostEnd = object.TimePostEnd
+	An.SleepTime = object.SleepTime
+	An.JobProcessing = object.JobProcessing
+	An.JobCount = object.JobCount
+	An.JobSuccess = object.JobSuccess
+	An.BackUpLine = object.BackUpLine
+	An.CodeError = object.CodeError
+	An.CodeAlert = object.CodeAlert
+	An.CodeCritical = object.CodeCritical
 
 	An.JobQueue = len(JobQueue)
 	An.PostCurrent = len(ConcurrentPost)
@@ -444,12 +454,14 @@ func GetAnalysis(host bool) []byte {
 	An.BatchLength = len(BuckDoc)
 
 	if host {
-		An.CpuRate = GetCpu()
-		An.Load = GetLoad()
-		An.MemRate = GetMem()
+		GetCpu()
+		GetLoad()
+		GetMem()
+		An.CpuRate = object.CpuRate
+		An.Load = object.Load
+		An.MemRate = object.MemRate
 	}
 
-	An.HostHealth = HostHealth
 	An.Cf = Cf
 	An.TimeDelay = time.Now().Unix() - An.TimePostEnd
 	An.TimeDelayStr = helper.FormatTime(An.TimeDelay)
@@ -462,28 +474,28 @@ func GetAnalysis(host bool) []byte {
 	return jsonData
 }
 
-func GetCpu() float64 {
+func GetCpu() {
 	shellPath := helper.GetPathJoin(Cf.AppPath, "host_info.sh cpu")
 	out := exec.Command("/bin/bash", "-c", shellPath)
 	content, _ := out.Output()
 	value := strings.TrimSpace(string(content))
-	return helper.Round(string(value), 2)
+	object.CpuRate = helper.Round(string(value), 2)
 }
 
-func GetLoad() float64 {
+func GetLoad() {
 	shellPath := helper.GetPathJoin(Cf.AppPath, "host_info.sh load")
 	out := exec.Command("/bin/bash", "-c", shellPath)
 	content, _ := out.Output()
 	value := strings.TrimSpace(string(content))
-	return helper.Round(string(value), 2)
+	object.Load = helper.Round(string(value), 2)
 }
 
-func GetMem() float64 {
+func GetMem() {
 	shellPath := helper.GetPathJoin(Cf.AppPath, "host_info.sh memory")
 	out := exec.Command("/bin/bash", "-c", shellPath)
 	content, _ := out.Output()
 	value := strings.TrimSpace(string(content))
-	return helper.Round(string(value), 2)
+	object.MemRate = helper.Round(string(value), 2)
 }
 
 //获取统计信息
@@ -493,9 +505,8 @@ func SetAnalysis() {
 		L.Debug("analysis file empty", LEVEL_INFO)
 		return
 	}
-	An = Analysis{}
 	err := json.Unmarshal(file, &An)
-	An.JobProcessing = 0
+	object.JobProcessing = 0
 	if err != nil {
 		L.Debug("analysis unmarshal error"+err.Error(), LEVEL_ERROR)
 	}

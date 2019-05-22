@@ -4,8 +4,22 @@ import (
 	"time"
 )
 
+var SleepTime = float64(0)
+var CpuRate = float64(0)
+var Load = float64(0)
+var MemRate = float64(0)
+var TimeEnd = int64(0)
+var TimeStart = int64(0)
+var TimePostEnd = int64(0)
+var JobCount = int64(0)
+var JobProcessing = int64(0)
+var JobSuccess = int64(0)
+var BackUpLine = int64(0)
+var CodeError = int64(0)
+var CodeAlert = int64(0)
+var CodeCritical = int64(0)
+
 type SystemAnalysis struct {
-	LineCount int64   `json:"line_count"`
 	SleepTime float64 `json:"sleep_time"`
 
 	//请求统计
@@ -33,9 +47,9 @@ type SystemAnalysis struct {
 	Load           float64 `json:"load"`
 	MemRate        float64 `json:"mem_rate"`
 
-	CodeError    float64 `json:"code_error"`
-	CodeAlert    float64 `json:"code_alert"`
-	CodeCritical float64 `json:"code_critical"`
+	CodeError    int64 `json:"code_error"`
+	CodeAlert    int64 `json:"code_alert"`
+	CodeCritical int64 `json:"code_critical"`
 
 	BatchLength int `json:"batch_length"`
 

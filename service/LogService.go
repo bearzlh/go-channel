@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"workerChannel/helper"
+	"workerChannel/object"
 )
 
 //日志类型
@@ -80,19 +81,13 @@ func (Log *LogService) Debug(msg string, level string) {
 		}
 		switch level {
 		case LEVEL_ERROR:
-			Lock.Lock()
-			An.CodeError++
-			Lock.Unlock()
+			object.CodeError++
 			break
 		case LEVEL_ALERT:
-			Lock.Lock()
-			An.CodeAlert++
-			Lock.Unlock()
+			object.CodeAlert++
 			break
 		case LEVEL_CRITICAL:
-			Lock.Lock()
-			An.CodeCritical++
-			Lock.Unlock()
+			object.CodeCritical++
 			break
 		}
 	}

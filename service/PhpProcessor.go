@@ -22,8 +22,6 @@ type Processor struct {
 
 var phpLineLock sync.Mutex
 
-var LineTime float64
-var LineCount float64
 var UserTable = "openid recharge user"
 
 type PhpProcessor struct {
@@ -43,23 +41,12 @@ func (PP *Processor) ProcessLine() {
 	L.Debug("日志收集开始"+PP.Rp.Type, LEVEL_INFO)
 	var currentId string
 	tail := Tail[PP.Rp.Type]
-	LineCount = 0
-	LineTime = 0
 	for line := range tail.Lines {
-		Lock.Lock()
-		sleepTime := An.SleepTime
-		Lock.Unlock()
-		time.Sleep(time.Duration(sleepTime))
-		now := time.Now()
+		time.Sleep(time.Duration(object.SleepTime))
 		phpLine := PP.IncreaseLineNumber()
-		Lock.Lock()
-		An.LineCount++
-		Lock.Unlock()
 		text := fmt.Sprintf("[%d] ", phpLine) + line.Text
 		//记录当前id
 		currentId = PP.LineToJob(text, currentId)
-		LineCount++
-		LineTime += float64(time.Now().Sub(now))
 		if !Cf.Factory.On {
 			L.Debug("日志收集暂停", LEVEL_NOTICE)
 			break
@@ -73,18 +60,18 @@ func GetSleepTime() {
 		for {
 			select {
 			case <-time.After(time.Second):
-				Lock.Lock()
-				if An.CpuRate > 0 {
-					if An.CpuRate > Cf.Monitor.Cpu {
-						An.SleepTime += float64(Cf.Monitor.SleepIntervalNs)
+				GetCpu()
+				cpuRate := object.CpuRate
+				if cpuRate > 0 {
+					if cpuRate > Cf.Monitor.Cpu {
+						object.SleepTime += float64(Cf.Monitor.SleepIntervalNs)
 					} else {
-						An.SleepTime -= float64(Cf.Monitor.SleepIntervalNs)
+						object.SleepTime -= float64(Cf.Monitor.SleepIntervalNs)
 					}
 				}
-				if An.SleepTime < 0 {
-					An.SleepTime = 0
+				if object.SleepTime < 0 {
+					object.SleepTime = 0
 				}
-				Lock.Unlock()
 			}
 		}
 	}()
@@ -107,10 +94,8 @@ func (PP *Processor) LineToJob(text string, preId string) string {
 		go func(jobId string) {
 			select {
 			case <-time.After(time.Second * time.Duration(Cf.PhpTimeWindow)):
-				Lock.Lock()
-				An.JobCount++
-				An.JobProcessing++
-				Lock.Unlock()
+				object.JobCount++
+				object.JobProcessing++
 				JobQueue <- jobId
 			}
 		}(id)
@@ -149,6 +134,7 @@ func (PP *Processor)GetPhpMsg(lines []string, pm *object.PhpMsg) {
 
 //初始化消息主体
 func (PP *Processor)MsgAddContent(p *object.PhpMsg, line string) {
+	object.TimeEnd = time.Now().Unix()
 	s := helper.RegexpMatch(line, PhpFirstLineRegex)
 	if len(s) > 0 {
 		p.Date = helper.FormatTimeStamp(string(s[3]), "")

@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
-	//_ "net/http/pprof"
+	"net/http"
+	"time"
+
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -10,7 +13,10 @@ import (
 	"workerChannel/service"
 )
 
+var StartTime int64
+
 func main() {
+	StartTime = time.Now().Unix()
 	SignalHandler()
 
 	//获取当前路径
@@ -26,10 +32,10 @@ func main() {
 	//服务初始化
 	ServiceInit()
 
-	//errServe := http.ListenAndServe("127.0.0.1:6060", nil)
-	//if errServe != nil {
-	//	service.L.Debug("ListenAndServe error"+errServe.Error(), service.LEVEL_ERROR)
-	//}
+	errServe := http.ListenAndServe("127.0.0.1:6060", nil)
+	if errServe != nil {
+		service.L.Debug("ListenAndServe error"+errServe.Error(), service.LEVEL_ERROR)
+	}
 	select {}
 }
 
@@ -64,6 +70,7 @@ func SignalHandler() {
 	go func() {
 		msg := <-service.StopSignal //阻塞等待
 		//保存当前状态
+		service.L.Debug(fmt.Sprintf("time_end,%d", time.Now().Unix()-StartTime), service.LEVEL_NOTICE)
 		service.L.Debug("信息中断，信号信息"+msg.String(), service.LEVEL_CRITICAL)
 		service.StopWork()
 		os.Exit(0)
