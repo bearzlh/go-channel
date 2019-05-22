@@ -53,6 +53,7 @@ func TestAn(t *testing.T) {
 }
 
 func TestHost(t *testing.T) {
+	t.Log(service.Cf.ReadPath[0].AppId)
 	t.Log(service.Cf.ReadPath[1].AppId)
 	//t.Log(service.Cf.AppId)
 }

@@ -44,7 +44,7 @@ fi
 
 upx $dir/$out > /dev/null
 
-cat ./config.tpl | sed "s#//.*##g" | sed "s#php_log_dir#$php_log_dir#"|sed "s#es_host_port#$es_host_port#"|jq '{read_path:[.read_path[0]],log,factory,msg,server_port,php_time_window,es,monitor,version,env}' > $dir/config.json
+cat ./config.tpl | sed "s#//.*##g" | sed "s#php_log_dir#$php_log_dir#"|sed "s#es_host_port#$es_host_port#"|jq '{read_path:[.read_path[0]],log,factory,msg,server_port,php_time_window,es,monitor,version,env,recover}' > $dir/config.json
 
 cp host_info.sh $dir
 cp postlog.service $dir

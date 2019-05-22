@@ -150,7 +150,8 @@ func CheckHostHealth() {
 			case <-TimeThirty.C:
 				TimeThirty.Reset(time.Second * time.Duration(Cf.Monitor.PickInterval))
 				msg := new(object.WorkerMsg)
-				err := json.Unmarshal([]byte(MsgToJson(An)), msg)
+				Ana := GetAnalysis(true)
+				err := json.Unmarshal([]byte(Ana), msg)
 				if err != nil {
 					L.Debug("统计信息解析失败"+err.Error(), LEVEL_ERROR)
 				} else {
@@ -159,7 +160,7 @@ func CheckHostHealth() {
 					msg.AppId = GetAppIdFromHostName(msg.HostName)
 					msg.Date = time.Now().Unix()
 					L.Debug("发送统计数据", LEVEL_INFO)
-					Es.PostAdd(msg)
+					Es.BuckAdd(msg)
 				}
 			}
 		}
@@ -168,6 +169,7 @@ func CheckHostHealth() {
 
 //业务处理
 func (w *Worker) handleJob(jobId string) {
+	object.JobProcessing--
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	if item, ok := GetMap(jobId); ok {
 		Msg := object.PhpMsg{}
@@ -175,13 +177,12 @@ func (w *Worker) handleJob(jobId string) {
 		if CheckValid(&Msg) {
 			//批量发送
 			Es.BuckAdd(Msg)
-			PPList[item.Type].SetPhpLineNumber(Msg.LogLine)
+			PPList[item.Type].SetPhpPostLineNumber(Msg.LogLine)
 			L.Debug("content=>"+MsgToJson(Msg), LEVEL_DEBUG)
 		} else {
 			L.Debug("xid不存在", LEVEL_NOTICE)
 		}
 
-		object.JobProcessing--
 		DelMap(jobId)
 	} else {
 		L.Debug("job error,for id=>"+jobId, LEVEL_INFO)
@@ -232,13 +233,13 @@ func InitFactory() {
 	IP.GetDB()
 	object.SleepTime = An.SleepTime
 
-	object.TimeStart = An.TimeStart
-	object.TimeEnd = An.TimeEnd
+	object.TimeStart = time.Now().Unix()
+	object.TimeEnd = time.Now().Unix()
 	object.TimePostEnd = An.TimePostEnd
 	object.SleepTime = An.SleepTime
-	object.JobProcessing = An.JobProcessing
-	object.JobCount = An.JobCount
-	object.JobSuccess = An.JobSuccess
+	object.JobProcessing = 0
+	object.JobCount = 0
+	object.JobSuccess = 0
 	object.BackUpLine = An.BackUpLine
 
 	GetSleepTime()
@@ -317,7 +318,6 @@ func TailFile(FileName string, Rp ReadPath) {
 		if positionObj.File == FileName {
 			currentLine = positionObj.Line
 			position = GetPositionFromFileLine(FileName, currentLine)
-			currentLine = GetFileLineFromPosition(FileName, position)
 		}
 	} else {
 		currentLine = GetFileEndLine(FileName)
@@ -557,7 +557,7 @@ func SaveRunTimeStatus() {
 					PP := PPList[rp.Type]
 					L.Debug(file, LEVEL_DEBUG)
 					if oTail != nil {
-						line := PP.GetPhpLineNumber()
+						line := PP.GetPhpPostLineNumber()
 						P := object.Position{File: oTail.Filename, Line: line}
 						L.Debug(fmt.Sprintf("runtime status save,line +%d", line), LEVEL_INFO)
 						SetPosition(file, P)

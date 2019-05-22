@@ -146,10 +146,14 @@ func (E *EsService) BuckWatch() {
 					L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 				}
 			case <-BuckFull:
+				if len(BuckFull) == 0 {
+					BuckFull <- true
+				}
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
 					L.Debug("size over to post", LEVEL_INFO)
 					content, jobs := E.ProcessBulk()
+					<-BuckFull
 					go func() {
 						Es.BuckPost(content, jobs)
 					}()
@@ -199,7 +203,7 @@ func (E *EsService) CheckStorage() {
 						if len(dataPost) >= Cf.Msg.BatchSize*2 {
 							postData := strings.Join(dataPost, "")
 							ThreadLimit<-1
-							L.Debug(fmt.Sprintf("线程数, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
+							L.Debug(fmt.Sprintf("暂存发送, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
 							dataPost = make([]string, 0)
 							go func() {
 								sendingLock.Lock()
@@ -226,7 +230,7 @@ func (E *EsService) CheckStorage() {
 							if len(dataPost) > 0 {
 								postData := strings.Join(dataPost, "")
 								ThreadLimit<-1
-								L.Debug(fmt.Sprintf("线程数, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
+								L.Debug(fmt.Sprintf("暂存发送, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
 								go func() {
 									sendingLock.Lock()
 									if len(sending) == 0 {
@@ -309,7 +313,7 @@ func (E *EsService) SaveToStorage(content string) {
 //添加数据
 func (E *EsService) BuckAdd(msg object.MsgInterface) {
 	BuckDoc <- object.Doc{Index: msg.GetIndexObj(Cf.Env, Cf.Es.IndexFormat, msg.GetTimestamp()), Content: msg}
-	if len(BuckDoc) > Cf.Msg.BatchSize {
+	if len(BuckDoc) > Cf.Msg.BatchSize && len(BuckFull) == 0 {
 		BuckFull <- true
 	}
 }

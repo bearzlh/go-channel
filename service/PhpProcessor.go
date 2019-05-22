@@ -18,17 +18,12 @@ import (
 type Processor struct {
 	Rp                ReadPath
 	phpLineNumber     int64
+	phpPostLineNumber     int64
 }
 
 var phpLineLock sync.Mutex
 
 var UserTable = "openid recharge user"
-
-type PhpProcessor struct {
-	Rp                ReadPath
-	phpLineNumber     int64
-	phpPostLineNumber int64
-}
 
 const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD|OPTIONS|PUT|DELETE|TRACE|CONNECT) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
@@ -373,19 +368,25 @@ func (PP *Processor)SetPhpLineNumber(line int64) int64 {
 	return PP.phpLineNumber
 }
 
-//设置php读取行
-func (PP *Processor)GetPhpLineNumber() int64 {
-	phpLineLock.Lock()
-	defer phpLineLock.Unlock()
+//提高php读取行
+func (PP *Processor) IncreaseLineNumber() int64 {
+	PP.phpLineNumber++
 	return PP.phpLineNumber
 }
 
-//提高php读取行
-func (PP *Processor) IncreaseLineNumber() int64 {
+//设置php读取行
+func (PP *Processor)SetPhpPostLineNumber(line int64) int64 {
 	phpLineLock.Lock()
 	defer phpLineLock.Unlock()
-	PP.phpLineNumber++
-	return PP.phpLineNumber
+	PP.phpPostLineNumber = line
+	return PP.phpPostLineNumber
+}
+
+//设置php读取行
+func (PP *Processor)GetPhpPostLineNumber() int64 {
+	phpLineLock.Lock()
+	defer phpLineLock.Unlock()
+	return PP.phpPostLineNumber
 }
 
 //解析url

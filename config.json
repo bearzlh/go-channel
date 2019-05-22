@@ -7,8 +7,18 @@
       "type": "php",
       "on": true,
       "continue": true,
-      "appid": "",
-      "pick": ""
+      "appid": "localhost",
+      "pick": "cookie,get,order,user,wechat"
+    },
+    {
+      "dir": "/var/log/cpslog_xd/",
+      "time_format": "Ym/d_H",
+      "suffix": ".log",
+      "type": "xd",
+      "on": true,
+      "continue": true,
+      "appid": "xd",
+      "pick": "cookie,get,order,user,wechat"
     }
   ],
   "env": "test",
@@ -44,14 +54,14 @@
     "host": "192.168.0.109:9200",
     "index_format": "Y.m.d",
     "retry": 5,
-    "concurrent_post": 10,
+    "concurrent_post": 50,
     "storage": "storage",
-    "recover_thread": 2
+    "recover_thread": 20
   },
   "recover": {
-    "from": "2019-05-21 13:00:00",
-    "to": "2019-05-21 13:41:25"
+    "from": "",
+    "to": ""
   },
-  "version": "0.22",
+  "version": "0.23",
   "appid": ""
 }
