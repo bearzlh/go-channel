@@ -50,6 +50,7 @@ func (E *EsService) Init() {
 	}
 	//检测批量发送队列
 	Es.BuckWatch()
+	Es.CheckBuckLen()
 }
 
 //检查es是否可用
@@ -147,10 +148,8 @@ func (E *EsService) BuckWatch() {
 				}
 			case <-BuckFull:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
-				BuckFull <- true
 				L.Debug("size over to post", LEVEL_INFO)
 				content, jobs := E.ProcessBulk()
-				<-BuckFull
 				go func() {
 					Es.BuckPost(content, jobs)
 				}()
@@ -160,17 +159,19 @@ func (E *EsService) BuckWatch() {
 }
 
 //检查队列长度
-func (E *EsService) CheckBuck() {
-	t := time.NewTimer(time.Millisecond * 100)
-	for {
-		select {
-		case <-t.C:
-			t.Reset(time.Millisecond * 100)
-			if len(BuckDoc) > Cf.Msg.BatchSize {
-				BuckFull <- true
+func (E *EsService) CheckBuckLen() {
+	go func() {
+		t := time.NewTimer(time.Millisecond * 100)
+		for {
+			select {
+			case <-t.C:
+				t.Reset(time.Millisecond * 100)
+				if len(BuckDoc) > Cf.Msg.BatchSize {
+					BuckFull <- true
+				}
 			}
 		}
-	}
+	}()
 }
 
 //检查暂存
