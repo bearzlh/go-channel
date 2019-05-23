@@ -338,9 +338,8 @@ func (E *EsService) ProcessBulk() (string, string) {
 		indexContent, _ := json.Marshal(doc.Index)
 		Content, _ := json.Marshal(doc.Content)
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
-		docTime := doc.Content.GetTimestamp()
-		if docTime > object.TimePostEnd {
-			object.TimePostEnd = docTime
+		if doc.Content.GetName() == "php" {
+			object.TimePostEnd = doc.Content.GetTimestamp()
 		}
 		jobs[i] = doc.Content.GetJobId()
 	}

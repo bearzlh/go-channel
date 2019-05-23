@@ -90,7 +90,7 @@ func StartWork() {
 						for {
 							//以防配置文件修改后不生效
 							item = Cf.ReadPath[i]
-							if !Cf.Factory.On {
+							if !Cf.Factory.On || StopStatus {
 								L.Debug("日志切换检测停止", LEVEL_NOTICE)
 								break
 							}
@@ -200,7 +200,6 @@ func (w *Worker) Start() {
 				L.Debug("worker stopped:"+w.ID, LEVEL_NOTICE)
 				return
 			}
-			time.Sleep(time.Duration(object.SleepTime))
 			select {
 			case jobID := <-JobQueue:
 				L.Debug(fmt.Sprintf("worker: %s, will handle job: %s", w.ID, jobID), LEVEL_DEBUG)
@@ -238,7 +237,7 @@ func InitFactory() {
 
 	object.TimeStart = time.Now().Unix()
 	object.TimeEnd = time.Now().Unix()
-	object.TimePostEnd = An.TimePostEnd
+	object.TimePostEnd = time.Now().Unix()
 	object.SleepTime = An.SleepTime
 	object.JobProcessing = 0
 	object.JobCount = 0

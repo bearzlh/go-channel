@@ -39,6 +39,7 @@ func (PP *Processor) ProcessLine() {
 	tail := Tail[PP.Rp.Type]
 	text := ""
 	for line := range tail.Lines {
+		time.Sleep(time.Duration(object.SleepTime))
 		phpLine := PP.IncreaseLineNumber()
 		check := helper.RegexpMatch(line.Text, `^([[:alnum:]]{13}) `)
 		cancel := make(chan bool, 1)
