@@ -338,10 +338,13 @@ func (E *EsService) ProcessBulk() (string, string) {
 		indexContent, _ := json.Marshal(doc.Index)
 		Content, _ := json.Marshal(doc.Content)
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
-		object.TimePostEnd = doc.Content.GetTimestamp()
+		docTime := doc.Content.GetTimestamp()
+		if docTime > object.TimePostEnd {
+			object.TimePostEnd = docTime
+		}
 		jobs[i] = doc.Content.GetJobId()
 	}
-	L.Debug(fmt.Sprintf("组装数据,%d", len(bulkContent)), LEVEL_INFO)
+	L.Debug(fmt.Sprintf("组装数据,%d", len(bulkContent) / 2), LEVEL_INFO)
 	return strings.Join(bulkContent, "\n") + "\n", strings.Join(jobs, ",")
 }
 
@@ -374,7 +377,9 @@ func (E *EsService) BuckPost(content string, jobs string) bool {
 	if errorsGet {
 		return errorsGet
 	} else {
-		object.JobSuccess += int64(len(content) / 2)
+		joblist := strings.Split(jobs, ",")
+		object.JobSuccess += int64(len(joblist))
+		object.JobSuccessTime = time.Now().Unix()
 		L.Debug("发送成功,jobs-->"+jobs, LEVEL_INFO)
 		return true
 	}

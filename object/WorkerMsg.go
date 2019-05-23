@@ -14,6 +14,7 @@ var TimePostEnd = int64(0)
 var JobCount = int64(0)
 var JobProcessing = int64(0)
 var JobSuccess = int64(0)
+var JobSuccessTime = int64(0)
 var BackUpLine = int64(0)
 var CodeError = int64(0)
 var CodeAlert = int64(0)
@@ -23,12 +24,14 @@ type SystemAnalysis struct {
 	SleepTime float64 `json:"sleep_time"`
 
 	//请求统计
-	JobCount      int64 `json:"job_count"`
-	JobQueue      int   `json:"job_queue"`
-	JobProcessing int64 `json:"job_processing"`
-	JobSuccess    int64 `json:"job_success"`
-	PostCurrent   int   `json:"post_current"`
-	IpCurrent     int   `json:"ip_current"`
+	JobCount       int64   `json:"job_count"`
+	JobQueue       int     `json:"job_queue"`
+	JobProcessing  int64   `json:"job_processing"`
+	JobSuccess     int64   `json:"job_success"`
+	JobSuccessTime int64   `json:"job_success_time"`
+	JobRate        float64 `json:"job_rate"`
+	PostCurrent    int     `json:"post_current"`
+	IpCurrent      int     `json:"ip_current"`
 
 	//运行时间
 	TimeStart      int64  `json:"time_start"`

@@ -160,6 +160,7 @@ func CheckHostHealth() {
 					msg.AppId = GetAppIdFromHostName(msg.HostName)
 					msg.Date = time.Now().Unix()
 					L.Debug("发送统计数据", LEVEL_INFO)
+					object.JobCount++
 					Es.BuckAdd(msg)
 				}
 			}
@@ -184,6 +185,7 @@ func (w *Worker) handleJob(jobId string) {
 		}
 
 		DelMap(jobId)
+		L.Debug(fmt.Sprintf("Job done,id=>%s", jobId), LEVEL_DEBUG)
 	} else {
 		L.Debug("job error,for id=>"+jobId, LEVEL_INFO)
 	}
@@ -198,6 +200,7 @@ func (w *Worker) Start() {
 				L.Debug("worker stopped:"+w.ID, LEVEL_NOTICE)
 				return
 			}
+			time.Sleep(time.Duration(object.SleepTime))
 			select {
 			case jobID := <-JobQueue:
 				L.Debug(fmt.Sprintf("worker: %s, will handle job: %s", w.ID, jobID), LEVEL_DEBUG)
@@ -431,7 +434,14 @@ func GetAnalysis(host bool) []byte {
 	An.SleepTime = object.SleepTime
 	An.JobProcessing = object.JobProcessing
 	An.JobCount = object.JobCount
+	timeSpan := object.JobSuccessTime - An.JobSuccessTime
+	if timeSpan > 0 {
+		An.JobRate = float64((object.JobSuccess - An.JobSuccess) / timeSpan)
+	} else {
+		An.JobRate = 0.0
+	}
 	An.JobSuccess = object.JobSuccess
+	An.JobSuccessTime = object.JobSuccessTime
 	An.BackUpLine = object.BackUpLine
 	An.CodeError = object.CodeError
 	An.CodeAlert = object.CodeAlert

@@ -9,22 +9,12 @@
       "continue": true,
       "appid": "localhost",
       "pick": "cookie,get,order,user,wechat"
-    },
-    {
-      "dir": "/var/log/cpslog_xd/",
-      "time_format": "Ym/d_H",
-      "suffix": ".log",
-      "type": "xd",
-      "on": true,
-      "continue": true,
-      "appid": "xd",
-      "pick": "cookie,get,order,user,wechat"
     }
   ],
   "env": "test",
   "log": {
     "path": "log",
-    "level": "info",
+    "level": "debug",
     "format_time": "Ym/d_H",
     "format_level": false
   },
@@ -54,9 +44,9 @@
     "host": "192.168.0.109:9200",
     "index_format": "Y.m.d",
     "retry": 5,
-    "concurrent_post": 50,
+    "concurrent_post": 10,
     "storage": "storage",
-    "recover_thread": 20
+    "recover_thread": 2
   },
   "recover": {
     "from": "",
