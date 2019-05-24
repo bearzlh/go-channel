@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"time"
 
-	_ "net/http/pprof"
+	//_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -32,10 +31,10 @@ func main() {
 	//服务初始化
 	ServiceInit()
 
-	errServe := http.ListenAndServe(":6060", nil)
-	if errServe != nil {
-		service.L.Debug("ListenAndServe error"+errServe.Error(), service.LEVEL_ERROR)
-	}
+	//errServe := http.ListenAndServe(":6060", nil)
+	//if errServe != nil {
+	//	service.L.Debug("ListenAndServe error"+errServe.Error(), service.LEVEL_ERROR)
+	//}
 	select {}
 }
 
