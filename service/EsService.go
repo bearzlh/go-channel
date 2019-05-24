@@ -138,6 +138,7 @@ func (E *EsService) BuckWatch() {
 			case <-t.C:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
+					EsRunning = time.Now().Unix()
 					L.Debug("time up to post", LEVEL_INFO)
 					content, jobs := E.ProcessBulk()
 					go func() {
@@ -147,6 +148,7 @@ func (E *EsService) BuckWatch() {
 					L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 				}
 			case <-BuckFull:
+				EsRunning = time.Now().Unix()
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				L.Debug("size over to post", LEVEL_INFO)
 				content, jobs := E.ProcessBulk()
@@ -349,7 +351,6 @@ func (E *EsService) ProcessBulk() (string, string) {
 
 //发送批量数据
 func (E *EsService) BuckPost(content string, jobs string) bool {
-	EsRunning = time.Now().Unix()
 	if Cf.Recover.From != "" {
 		L.Debug("数据恢复中", LEVEL_INFO)
 		E.SaveToStorage(content)

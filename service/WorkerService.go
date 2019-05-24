@@ -101,11 +101,9 @@ func StartWork() {
 								if Tail[item.Type] != nil && Tail[item.Type].Filename != "" {
 									nextFile := GetNextFile(item, Tail[item.Type].Filename)
 									if nextFile != "" {
-										nowStamp := time.Now().Unix()
-										formatNow := helper.TimeFormat("Y-m-d H:i:s", nowStamp)
 										formatEnd := helper.TimeFormat("Y-m-d H:i:s", object.TimeEnd)
-										if nowStamp-object.TimeEnd > int64(Cf.Msg.BatchTimeSecond+3) {
-											L.Debug("日志切换生效->"+nextFile+":"+formatNow+"-"+formatEnd, LEVEL_INFO)
+										if len(Tail[item.Type].Lines) == 0 {
+											L.Debug("日志切换生效"+nextFile+"-"+formatEnd, LEVEL_INFO)
 											TailNextFile(nextFile, item)
 										}
 									}
@@ -433,6 +431,10 @@ func GetAnalysis(host bool) []byte {
 	An.SleepTime = object.SleepTime
 	An.JobProcessing = object.JobProcessing
 	An.JobCount = object.JobCount
+	An.LineLength = 0
+	for _, tailItem := range Tail {
+		An.LineLength += len(tailItem.Lines)
+	}
 	timeSpan := object.JobSuccessTime - An.JobSuccessTime
 	if timeSpan > 0 {
 		An.JobRate = float64((object.JobSuccess - An.JobSuccess) / timeSpan)
@@ -559,7 +561,7 @@ func SaveRunTimeStatus() {
 		select {
 		case <-time.After(time.Millisecond * 1000):
 			L.Debug(fmt.Sprintf("SaveRunTimeStatus,%d,%d,%d", time.Now().Unix(), EsRunning, int64(Cf.Msg.BatchTimeSecond)), LEVEL_NOTICE)
-			if time.Now().Unix()-EsRunning > int64(Cf.Msg.BatchTimeSecond) {
+			if time.Now().Unix()-EsRunning > int64(Cf.Msg.BatchTimeSecond) && len(ConcurrentPost) == 0 {
 				for _, rp := range Cf.ReadPath {
 					file := GetPositionFile(rp.Type)
 					oTail := Tail[rp.Type]

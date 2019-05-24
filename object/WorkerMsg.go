@@ -55,6 +55,7 @@ type SystemAnalysis struct {
 	CodeCritical int64 `json:"code_critical"`
 
 	BatchLength int `json:"batch_length"`
+	LineLength int `json:"line_length"`
 
 	HostHealth bool `json:"host_health"`
 }

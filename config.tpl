@@ -38,10 +38,10 @@
     "ip_check_interval": 30
   },
   "monitor": {
-    "cpu": 200,//cpu限制
-    "sleep_interval_ns": 100,//cpu限制参数
+    "cpu": 140,//cpu限制
+    "sleep_interval_ns": 50,//cpu限制参数
     "memory_restart": 15,//内存使用率超过此值将重启脚本
-    "pick_interval": 15,//统计信息收集到es中的间隔
+    "pick_interval": 10,//统计信息收集到es中的间隔
     "check_interval": 5 //统计信息检查间隔
   },
   "server_port": ":8081",

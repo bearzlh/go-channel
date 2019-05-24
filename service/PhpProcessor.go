@@ -27,7 +27,7 @@ var UserTable = "openid recharge user"
 
 var MsgLock = new(sync.Mutex)
 
-const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) (GET|POST|HEAD|OPTIONS|PUT|DELETE|TRACE|CONNECT) (.*)`
+const PhpFirstLineRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[(.*?)\] (.*?) (\w+) (.*)`
 const PhpMsgRegex = `^\[(\d+)\] ([[:alnum:]]{13}) \[ (\w+) \] (.*)`
 const PhpFrontCookie = `.*? NetType:(\w+) IP:.*? \[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] user_id:(\w+)* openid:(.*?)* channel_id:(\w+)* agent_id:(\w+)* referral_id:(\w+)*`
 const PhpAdminCookie = `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\w+)* group:(\w+)* `
@@ -41,13 +41,11 @@ func (PP *Processor) ProcessLine() {
 	for line := range tail.Lines {
 		time.Sleep(time.Duration(object.SleepTime))
 		phpLine := PP.IncreaseLineNumber()
-		check := helper.RegexpMatch(line.Text, `^([[:alnum:]]{13}) `)
-		cancel := make(chan bool, 1)
-		if len(check) > 0 {
+		listStr := strings.Split(line.Text, " ")
+		if len(listStr) > 0 && len(listStr[0]) == 13 {
 			PP.LineToJob(text)
 			text = fmt.Sprintf("[%d] "+line.Text, phpLine)
 		} else {
-			cancel<-true
 			text += line.Text
 		}
 		if !Cf.Factory.On {
@@ -82,11 +80,11 @@ func GetSleepTime() {
 
 //为日志行分组
 func (PP *Processor) LineToJob(text string) {
-	check := helper.RegexpMatch(text, `^\[\d+\] ([[:alnum:]]{13}) `)
-	if len(check) == 0 {
+	listStr := strings.Split(text, " ")
+	if len(listStr) < 2 || len(listStr[1]) != 13 {
 		return
 	}
-	id := string(check[1])
+	id := string(listStr[1])
 
 	//任务处理，并计时，规定时间后处理任务
 	if item, ok := GetMap(id); !ok && id != "" {
@@ -121,7 +119,6 @@ func (PP *Processor) GetPhpMsg(lines []string, pm *object.PhpMsg) {
 	if len(lines) <= 1 {
 		return
 	}
-	L.Debug(fmt.Sprintf("line len:%d", len(lines)), LEVEL_DEBUG)
 	msgCh := make(chan int, len(lines))
 	nextCh := make(chan int, 1)
 	pm.Message = make([]object.Content, len(lines)-1)
@@ -269,7 +266,7 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 		//添加订单参数
 		if strings.Contains(PP.Rp.Pick, "order") {
 			var res [][]byte
-			if strings.Contains(p.Uri, "/api/recharge/pay") {
+			if strings.Contains(p.Uri, "/api/recharge/pay") || strings.Contains(p.Uri, "/api/activity/pay") {
 				res = helper.RegexpMatch(Message.Content, PhpOrder)
 				if len(res) > 0 {
 					MsgLock.Lock()
@@ -319,8 +316,6 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 				}
 			}
 		}
-	}else{
-		fmt.Printf(line)
 	}
 	msgCh <- 0
 	L.Debug(fmt.Sprintf("xid:%s,msgChlen:%d,len(msgCh):%d", p.Xid, cap(msgCh), len(msgCh)), LEVEL_DEBUG)
@@ -341,6 +336,7 @@ func QueryProcess(values url.Values, msg *object.PhpMsg) {
 			msg.BookId = list[0]
 			break
 		case "chapter_id":
+		case "sid":
 			msg.ChapterId = list[0]
 			break
 		case "agent_id":
@@ -348,9 +344,6 @@ func QueryProcess(values url.Values, msg *object.PhpMsg) {
 			break
 		case "user_id":
 			msg.UserId = list[0]
-			break
-		case "openid":
-			msg.OpenId = list[0]
 			break
 		}
 	}
