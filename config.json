@@ -33,6 +33,7 @@
   },
   "monitor": {
     "cpu": 80,
+    "load": 6,
     "memory_restart": 10,
     "sleep_interval_ns": 200,
     "pick_interval": 30,

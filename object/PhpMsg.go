@@ -22,7 +22,6 @@ type PhpMsg struct {
 	BookId        string  `json:"book_id"`
 	ReferralId    string  `json:"referral_id"`
 	ChapterId     string  `json:"chapter_id"`
-	BookChapterId string  `json:"book_chapter_id"`
 
 	//Cookie参数
 	UserId    string `json:"user_id"`

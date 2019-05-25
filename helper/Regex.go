@@ -3,9 +3,7 @@ package helper
 import "regexp"
 
 //检测正则
-func RegexpMatch(content string, reg string) [][]byte {
-	byteContent := []byte(content)
+func RegexpMatch(content string, reg string) []string {
 	regex := regexp.MustCompile(reg)
-	s := regex.FindSubmatch(byteContent)
-	return s
+	return regex.FindStringSubmatch(content)
 }

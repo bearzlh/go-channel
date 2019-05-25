@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"workerChannel/helper"
+	"workerChannel/object"
 )
 
 const ConfigName = "config"
@@ -50,9 +51,11 @@ type ConfigService struct {
 	} `json:"es"`
 	Monitor struct {
 		Cpu             float64 `json:"cpu"`
+		Load            float64 `json:"load"`
 		MemRestart      float64 `json:"memory_restart"`
 		MemStop         float64 `json:"memory_stop"`
 		SleepIntervalNs int     `json:"sleep_interval_ns"`
+		SleepTimeSet    float64 `json:"sleep_time_set"`
 		PickInterval    int     `json:"pick_interval"`
 		CheckInterval   int     `json:"check_interval"`
 	} `json:"monitor"`
@@ -138,6 +141,10 @@ func (C *ConfigService) ConfigWatch() {
 				err = watch.Add(configFile)
 				if err != nil {
 					L.outPut(err.Error())
+				}
+
+				if Cf.Monitor.SleepTimeSet != 0 {
+					object.SleepTime = Cf.Monitor.SleepTimeSet
 				}
 
 				if workCount != Cf.Factory.WorkerInit {

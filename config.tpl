@@ -20,7 +20,7 @@
   ],
   "log": {
     "path": "/var/log/postlog/",//程序自身的日志目录
-    "level": "info",//程序自身的日志目录
+    "level": "error",//程序自身的日志目录
     "format_time": "Ym/d_H",
     "format_level": false
   },
@@ -38,8 +38,10 @@
     "ip_check_interval": 30
   },
   "monitor": {
-    "cpu": 140,//cpu限制
+    "cpu": 200,//cpu限制
+    "load": 5,//load限制
     "sleep_interval_ns": 50,//cpu限制参数
+    "sleep_time_set": 10000,//cpu限制参数
     "memory_restart": 15,//内存使用率超过此值将重启脚本
     "pick_interval": 10,//统计信息收集到es中的间隔
     "check_interval": 5 //统计信息检查间隔
@@ -50,12 +52,12 @@
     "host": "es_host_port",//es连接地址
     "index_format": "Y.m.d", //索引时间格式
     "retry": 10, //es重试
-    "concurrent_post": 50,//并发发送es请求的次数
+    "concurrent_post": 10,//并发发送es请求的次数
     "Storage": "storage", //es暂存目录
-    "recover_thread": 30 //es恢复暂存数据线程数
+    "recover_thread": 1 //es恢复暂存数据线程数
   },
   "version": "0.23",//脚本版本
-  "env": "log", //用作es索引前缀，如果非空将使用-与时间分隔
+  "env": "test", //用作es索引前缀，如果非空将使用-与时间分隔
   "appid": "", //appid字段，区分平台，默认使用主机名字符串
   "recover": {
     "from": "",

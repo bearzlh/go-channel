@@ -142,7 +142,7 @@ func CheckHostHealth() {
 				TimeFive.Reset(time.Second * time.Duration(Cf.Monitor.CheckInterval))
 				GetAnalysis(true)
 				if object.MemRate > Cf.Monitor.MemRestart {
-					L.Debug(fmt.Sprintf("内存使用率超过%f%%，进程重启", Cf.Monitor.MemRestart), LEVEL_NOTICE)
+					L.Debug(fmt.Sprintf("内存使用率超过%f%%，进程重启", Cf.Monitor.MemRestart), LEVEL_ERROR)
 					RestartCmd()
 				}
 			case <-TimeThirty.C:
@@ -168,7 +168,6 @@ func CheckHostHealth() {
 
 //业务处理
 func (w *Worker) handleJob(jobId string) {
-	object.JobProcessing--
 	L.Debug(fmt.Sprintf("Job doing,id=>%s", jobId), LEVEL_DEBUG)
 	if item, ok := GetMap(jobId); ok {
 		Msg := object.PhpMsg{}
@@ -204,6 +203,7 @@ func (w *Worker) Start() {
 				w.IsWorking = true
 				w.handleJob(jobID)
 				w.IsWorking = false
+				object.JobProcessing--
 				if w.IsQuit {
 					L.Debug(fmt.Sprintf("worker: %s, will quit", w.ID), LEVEL_NOTICE)
 					break
@@ -231,8 +231,6 @@ func InitFactory() {
 	LineMap = make(map[string]LineItem)
 	SetWorker(Cf.Factory.WorkerInit)
 	IP.GetDB()
-	object.SleepTime = An.SleepTime
-
 	object.TimeStart = time.Now().Unix()
 	object.TimeEnd = time.Now().Unix()
 	object.TimePostEnd = time.Now().Unix()
@@ -428,7 +426,7 @@ func GetAnalysis(host bool) []byte {
 	An.TimeStart = object.TimeStart
 	An.TimeEnd = object.TimeEnd
 	An.TimePostEnd = object.TimePostEnd
-	An.SleepTime = object.SleepTime
+	An.SleepTime = helper.RoundFloat(object.SleepTime, 2)
 	An.JobProcessing = object.JobProcessing
 	An.JobCount = object.JobCount
 	An.LineLength = 0
@@ -490,7 +488,7 @@ func GetCpu() {
 	out := exec.Command("/bin/bash", "-c", shellPath)
 	content, _ := out.Output()
 	value := strings.TrimSpace(string(content))
-	object.CpuRate = helper.Round(string(value), 2)
+	object.CpuRate = helper.RoundString(string(value), 2)
 }
 
 func GetLoad() {
@@ -498,7 +496,7 @@ func GetLoad() {
 	out := exec.Command("/bin/bash", "-c", shellPath)
 	content, _ := out.Output()
 	value := strings.TrimSpace(string(content))
-	object.Load = helper.Round(string(value), 2)
+	object.Load = helper.RoundString(string(value), 2)
 }
 
 func GetMem() {
@@ -506,7 +504,7 @@ func GetMem() {
 	out := exec.Command("/bin/bash", "-c", shellPath)
 	content, _ := out.Output()
 	value := strings.TrimSpace(string(content))
-	object.MemRate = helper.Round(string(value), 2)
+	object.MemRate = helper.RoundString(string(value), 2)
 }
 
 //获取统计信息
@@ -517,7 +515,6 @@ func SetAnalysis() {
 		return
 	}
 	err := json.Unmarshal(file, &An)
-	object.JobProcessing = 0
 	if err != nil {
 		L.Debug("analysis unmarshal error"+err.Error(), LEVEL_ERROR)
 	}

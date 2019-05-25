@@ -138,7 +138,6 @@ func (E *EsService) BuckWatch() {
 			case <-t.C:
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				if len(BuckDoc) > 0 {
-					EsRunning = time.Now().Unix()
 					L.Debug("time up to post", LEVEL_INFO)
 					content, jobs := E.ProcessBulk()
 					go func() {
@@ -148,7 +147,6 @@ func (E *EsService) BuckWatch() {
 					L.Debug("timeout to post, nodata", LEVEL_DEBUG)
 				}
 			case <-BuckFull:
-				EsRunning = time.Now().Unix()
 				t.Reset(time.Second * time.Duration(Cf.Msg.BatchTimeSecond))
 				L.Debug("size over to post", LEVEL_INFO)
 				content, jobs := E.ProcessBulk()
@@ -341,6 +339,7 @@ func (E *EsService) ProcessBulk() (string, string) {
 		Content, _ := json.Marshal(doc.Content)
 		bulkContent = append(bulkContent, string(indexContent), string(Content))
 		if doc.Content.GetName() == "php" {
+			EsRunning = time.Now().Unix()
 			object.TimePostEnd = doc.Content.GetTimestamp()
 		}
 		jobs[i] = doc.Content.GetJobId()
@@ -379,7 +378,6 @@ func (E *EsService) BuckPost(content string, jobs string) bool {
 	} else {
 		joblist := strings.Split(jobs, ",")
 		object.JobSuccess += int64(len(joblist))
-		object.JobSuccessTime = time.Now().Unix()
 		L.Debug("发送成功,jobs-->"+jobs, LEVEL_INFO)
 		return true
 	}
@@ -478,6 +476,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 		}
 	}
 	if err == nil {
+		object.JobSuccessTime = time.Now().Unix()
 		L.Debug("post success", LEVEL_NOTICE)
 	} else {
 		E.SaveToStorage(content)
