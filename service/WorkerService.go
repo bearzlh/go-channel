@@ -102,7 +102,7 @@ func StartWork() {
 									nextFile := GetNextFile(item, Tail[item.Type].Filename)
 									if nextFile != "" {
 										formatEnd := helper.TimeFormat("Y-m-d H:i:s", object.TimeEnd)
-										if len(Tail[item.Type].Lines) == 0 {
+										if time.Now().Unix() - object.TimeEnd > int64(Cf.Msg.BatchTimeSecond) && len(Tail[item.Type].Lines) == 0 {
 											L.Debug("日志切换生效"+nextFile+"-"+formatEnd, LEVEL_INFO)
 											TailNextFile(nextFile, item)
 										}
@@ -175,7 +175,6 @@ func (w *Worker) handleJob(jobId string) {
 		if CheckValid(&Msg) {
 			//批量发送
 			Es.BuckAdd(Msg)
-			PPList[item.Type].SetPhpPostLineNumber(Msg.LogLine)
 			L.Debug("content=>"+MsgToJson(Msg), LEVEL_DEBUG)
 		} else {
 			L.Debug("xid不存在", LEVEL_NOTICE)
@@ -472,7 +471,11 @@ func GetAnalysis(host bool) []byte {
 	}
 
 	An.Cf = Cf
-	An.TimeDelay = time.Now().Unix() - An.TimePostEnd
+	if An.TimePostEnd > 0 {
+		An.TimeDelay = time.Now().Unix() - An.TimePostEnd
+	}else{
+		An.TimeDelay = 0
+	}
 	An.TimeDelayStr = helper.FormatTime(An.TimeDelay)
 	An.TimePostEndStr = helper.TimeFormat("Y-m-d H:i:s", An.TimePostEnd)
 
@@ -558,7 +561,7 @@ func SaveRunTimeStatus() {
 		select {
 		case <-time.After(time.Millisecond * 1000):
 			L.Debug(fmt.Sprintf("SaveRunTimeStatus,%d,%d,%d", time.Now().Unix(), EsRunning, int64(Cf.Msg.BatchTimeSecond)), LEVEL_NOTICE)
-			if time.Now().Unix()-EsRunning > int64(Cf.Msg.BatchTimeSecond) && len(ConcurrentPost) == 0 {
+			if time.Now().Unix()-EsRunning > int64(Cf.Msg.BatchTimeSecond) && len(ConcurrentPost) == 0 && len(BuckDoc) == 0 {
 				for _, rp := range Cf.ReadPath {
 					file := GetPositionFile(rp.Type)
 					oTail := Tail[rp.Type]

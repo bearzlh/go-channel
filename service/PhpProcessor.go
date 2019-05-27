@@ -46,7 +46,7 @@ func (PP *Processor) ProcessLine() {
 		}
 		if len(listStr) > 0 && len(listStr[0]) == 13 {
 			PP.LineToJob(text)
-			text = fmt.Sprintf("[%d] "+line.Text, phpLine)
+			text = fmt.Sprintf("[%d] ", phpLine) + line.Text
 		} else {
 			text += line.Text
 		}
