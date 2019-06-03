@@ -50,38 +50,16 @@ func (PP *Processor) ProcessLine() {
 		} else {
 			text += line.Text
 		}
+		if len(tail.Lines) == 0 {
+			PP.LineToJob(text)
+			text = ""
+		}
 		if !Cf.Factory.On {
 			L.Debug("日志收集暂停", LEVEL_NOTICE)
 			break
 		}
 	}
 	L.Debug("文件结束", LEVEL_NOTICE)
-}
-
-//依据cpu使用率设置读取日志的休眠时间
-func GetSleepTime() {
-	go func() {
-		for {
-			select {
-			case <-time.After(time.Second):
-				GetCpu()
-				GetLoad()
-				if object.CpuRate > Cf.Monitor.Cpu && Cf.Monitor.Cpu > 0 {
-					object.SleepTime += float64(Cf.Monitor.SleepIntervalNs) * (object.CpuRate / Cf.Monitor.Cpu)
-				} else {
-					object.SleepTime -= float64(Cf.Monitor.SleepIntervalNs) * (object.CpuRate / Cf.Monitor.Cpu)
-				}
-
-				if object.Load > Cf.Monitor.Load && Cf.Monitor.Load > 0 {
-					object.SleepTime += float64(Cf.Monitor.SleepIntervalNs) * (object.Load / Cf.Monitor.Load)
-				}
-
-				if object.SleepTime < 0 {
-					object.SleepTime = 0
-				}
-			}
-		}
-	}()
 }
 
 //为日志行分组

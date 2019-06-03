@@ -102,7 +102,7 @@ func StartWork() {
 									nextFile := GetNextFile(item, Tail[item.Type].Filename)
 									if nextFile != "" {
 										formatEnd := helper.TimeFormat("Y-m-d H:i:s", object.TimeEnd)
-										if time.Now().Unix() - object.TimeEnd > int64(Cf.Msg.BatchTimeSecond) && len(Tail[item.Type].Lines) == 0 {
+										if EsRunning > 0 && len(Tail[item.Type].Lines) == 0 && len(JobQueue) == 0 && len(BuckDoc) == 0 {
 											L.Debug("日志切换生效"+nextFile+"-"+formatEnd, LEVEL_INFO)
 											TailNextFile(nextFile, item)
 										}
@@ -123,9 +123,12 @@ func StartWork() {
 func StopWork() {
 	StopStatus = true
 	time.Sleep(time.Second * 2)
-	SaveRunTimeStatus()
-	for key, value := range Tail {
+	//暂停读取文件
+	for _, value := range Tail {
 		StopTailFile(value)
+	}
+	SaveRunTimeStatus()
+	for key, _ := range Tail {
 		delete(Tail, key)
 	}
 	IP.Stop()
@@ -140,11 +143,34 @@ func CheckHostHealth() {
 			select {
 			case <-TimeFive.C:
 				TimeFive.Reset(time.Second * time.Duration(Cf.Monitor.CheckInterval))
-				GetAnalysis(true)
+				GetMem()
+				GetCpu()
+				GetLoad()
+
+				//检查内存
 				if object.MemRate > Cf.Monitor.MemRestart {
 					L.Debug(fmt.Sprintf("内存使用率超过%f%%，进程重启", Cf.Monitor.MemRestart), LEVEL_ERROR)
 					RestartCmd()
 				}
+
+				//检测cpu和负载
+				if object.Load > Cf.Monitor.Load {
+					object.SleepTime += float64(Cf.Monitor.SleepIntervalNs) * (object.Load / Cf.Monitor.Load)
+				} else if object.Load > Cf.Monitor.Load * 0.9 {
+					L.Debug(fmt.Sprintf("load over 0.9, %.2f", object.Load), LEVEL_INFO)
+					object.SleepTime += float64(Cf.Monitor.SleepIntervalNs)
+				} else {
+					if object.CpuRate > Cf.Monitor.Cpu*1.2 {
+						object.SleepTime += float64(Cf.Monitor.SleepIntervalNs) * (object.CpuRate / Cf.Monitor.Cpu)
+					} else if object.CpuRate < Cf.Monitor.Cpu*0.8 {
+						object.SleepTime -= float64(Cf.Monitor.SleepIntervalNs)
+					}
+				}
+
+				if object.SleepTime < 0 {
+					object.SleepTime = 0
+				}
+
 			case <-TimeThirty.C:
 				TimeThirty.Reset(time.Second * time.Duration(Cf.Monitor.PickInterval))
 				msg := new(object.WorkerMsg)
@@ -172,6 +198,7 @@ func (w *Worker) handleJob(jobId string) {
 	if item, ok := GetMap(jobId); ok {
 		Msg := object.PhpMsg{}
 		PPList[item.Type].GetPhpMsg(item.List, &Msg)
+		PPList[item.Type].SetPhpPostLineNumber(Msg.LogLine)
 		if CheckValid(&Msg) {
 			//批量发送
 			Es.BuckAdd(Msg)
@@ -238,8 +265,6 @@ func InitFactory() {
 	object.JobCount = 0
 	object.JobSuccess = 0
 	object.BackUpLine = An.BackUpLine
-
-	GetSleepTime()
 }
 
 //添加工人
@@ -303,6 +328,7 @@ func StopTailFile(tail *tail.Tail) {
 
 //执行查询
 func TailFile(FileName string, Rp ReadPath) {
+	EsRunning = 0
 	PPList[Rp.Type] = new(Processor)
 	PPList[Rp.Type].Rp = Rp
 	PPList[Rp.Type].phpLineNumber = int64(0)
@@ -518,6 +544,7 @@ func SetAnalysis() {
 		return
 	}
 	err := json.Unmarshal(file, &An)
+	An.JobSuccess = 0
 	if err != nil {
 		L.Debug("analysis unmarshal error"+err.Error(), LEVEL_ERROR)
 	}
@@ -558,10 +585,11 @@ func ExitProgramme(s os.Signal) {
 //保存状态
 func SaveRunTimeStatus() {
 	for {
+		currentEs := EsRunning
 		select {
 		case <-time.After(time.Millisecond * 1000):
-			L.Debug(fmt.Sprintf("SaveRunTimeStatus,%d,%d,%d", time.Now().Unix(), EsRunning, int64(Cf.Msg.BatchTimeSecond)), LEVEL_NOTICE)
-			if time.Now().Unix()-EsRunning > int64(Cf.Msg.BatchTimeSecond) && len(ConcurrentPost) == 0 && len(BuckDoc) == 0 {
+			L.Debug(fmt.Sprintf("SaveRunTimeStatus,%d,%d", currentEs, EsRunning), LEVEL_NOTICE)
+			if currentEs == EsRunning {
 				for _, rp := range Cf.ReadPath {
 					file := GetPositionFile(rp.Type)
 					oTail := Tail[rp.Type]

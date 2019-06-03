@@ -14,7 +14,7 @@
   "env": "test",
   "log": {
     "path": "log",
-    "level": "debug",
+    "level": "info",
     "format_time": "Ym/d_H",
     "format_level": false
   },

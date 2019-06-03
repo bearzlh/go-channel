@@ -39,9 +39,9 @@
   },
   "monitor": {
     "cpu": 200,//cpu限制
-    "load": 5,//load限制
+    "load": 7,//load限制
     "sleep_interval_ns": 500,//cpu限制参数
-    "sleep_time_set": 5000,//cpu限制参数
+    "sleep_time_set": 50000,//cpu限制参数
     "memory_restart": 15,//内存使用率超过此值将重启脚本
     "pick_interval": 10,//统计信息收集到es中的间隔
     "check_interval": 5 //统计信息检查间隔
@@ -56,7 +56,7 @@
     "Storage": "storage", //es暂存目录
     "recover_thread": 2 //es恢复暂存数据线程数
   },
-  "version": "0.24",//脚本版本
+  "version": "0.25",//脚本版本
   "env": "log", //用作es索引前缀，如果非空将使用-与时间分隔
   "appid": "", //appid字段，区分平台，默认使用主机名字符串
   "recover": {
