@@ -34,10 +34,9 @@ var EsCanUse = make(chan bool, 1)
 var Storage = make(chan bool, 1)
 var ConcurrentPost chan int
 var ThreadLimit chan int
-var EsRunning = int64(0)
+var EsRunning int64
 
 func (E *EsService) Init() {
-	EsRunning = time.Now().Unix()
 	if Cf.Recover.From == "" {
 		//es是否可用
 		E.CheckEsCanAccess()
