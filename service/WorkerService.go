@@ -102,7 +102,7 @@ func StartWork() {
 									nextFile := GetNextFile(item, Tail[item.Type].Filename)
 									if nextFile != "" {
 										formatEnd := helper.TimeFormat("Y-m-d H:i:s", object.TimeEnd)
-										if EsRunning > 0 && len(Tail[item.Type].Lines) == 0 && len(JobQueue) == 0 && len(BuckDoc) == 0 {
+										if len(Tail[item.Type].Lines) == 0 && time.Now().Unix()-EsRunning > int64(Cf.Msg.BatchTimeSecond) && len(ConcurrentPost) == 0 {
 											L.Debug("日志切换生效"+nextFile+"-"+formatEnd, LEVEL_INFO)
 											TailNextFile(nextFile, item)
 										}
