@@ -22,7 +22,7 @@ type Processor struct {
 
 var phpPostLineLock = new(sync.Mutex)
 
-var UserTable = "openid recharge user"
+var UserTable = "sign recharge consume user_recently_read recharge user"
 
 var MsgLock = new(sync.Mutex)
 

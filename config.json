@@ -42,7 +42,7 @@
   "server_port": ":8081",
   "php_time_window": 2,
   "es": {
-    "host": "192.168.0.109:9200",
+    "host": "192.168.0.104:9200",
     "index_format": "Y.m.d",
     "retry": 5,
     "concurrent_post": 10,
