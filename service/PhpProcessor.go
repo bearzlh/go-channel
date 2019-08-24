@@ -219,9 +219,14 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 			PP.setMessageOrder(p, Message)
 		}
 
-		//添加订单参数
+		//添加请求参数
 		if strings.Contains(PP.Rp.Pick, "params") {
 			PP.setMessageParams(p, Message)
+		}
+
+		//添加header参数
+		if strings.Contains(PP.Rp.Pick, "header") {
+			PP.setMessageHeader(p, Message)
 		}
 
 		//采集用户信息
@@ -301,7 +306,25 @@ func (PP *Processor) setMessageParams(p *object.PhpMsg, Message object.Content) 
 	if strings.Contains(Message.Content, "[ PARAM ] ") {
 		list := strings.Split(Message.Content, `[ PARAM ] `)
 		if len(list) == 2 && strings.HasPrefix(list[1], "{") {
-			p.Params, _ = simplejson.NewJson([]byte(list[1]))
+			param, _ := simplejson.NewJson([]byte(list[1]))
+			m, _ := param.Map()
+			for k, v := range m {
+				p.Request = append(p.Request, object.Query{Key: k, Value: v.(string)})
+			}
+		}
+	}
+}
+
+//设置订单参数
+func (PP *Processor) setMessageHeader(p *object.PhpMsg, Message object.Content) {
+	if strings.Contains(Message.Content, "[ HEADER ] ") {
+		list := strings.Split(Message.Content, `[ HEADER ] `)
+		if len(list) == 2 && strings.HasPrefix(list[1], "{") {
+			param, _ := simplejson.NewJson([]byte(list[1]))
+			m, _ := param.Map()
+			for k, v := range m {
+				p.Header = append(p.Header, object.Query{Key: k, Value: v.(string)})
+			}
 		}
 	}
 }

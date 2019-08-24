@@ -4,6 +4,7 @@ import (
 	"github.com/bitly/go-simplejson"
 	"strings"
 	"testing"
+	"workerChannel/object"
 )
 
 func TestJson(t *testing.T) {
@@ -24,6 +25,12 @@ func TestParams(t *testing.T) {
 	list := strings.Split(str, ` [ info ] [ PARAM ] `)
 	if len(list) == 2 && strings.HasPrefix(list[1], "{") {
 		param, _ := simplejson.NewJson([]byte(list[1]))
-		t.Log(param)
+		a := object.Query{}
+		m, _ := param.Map()
+		for k,v:= range m{
+			a.Key = k
+			a.Value = v.(string)
+		}
+		t.Log(a)
 	}
 }

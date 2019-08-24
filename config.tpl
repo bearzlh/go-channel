@@ -7,7 +7,7 @@
       "type": "php",//es索引参数
       "on": true,//开启日志读取
       "continue": true,//从上次读取结束时继续读取
-      "pick": "cookie,get,order,user,wechat,params" //采集cookie与get参数
+      "pick": "cookie,get,order,user,wechat,params,header" //采集cookie与get参数
     }
   ],
   "log": {
