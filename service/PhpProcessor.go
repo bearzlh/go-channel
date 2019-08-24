@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bitly/go-simplejson"
 	"net/url"
 	"os"
 	"os/exec"
@@ -218,6 +219,11 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 			PP.setMessageOrder(p, Message)
 		}
 
+		//添加订单参数
+		if strings.Contains(PP.Rp.Pick, "params") {
+			PP.setMessageParams(p, Message)
+		}
+
 		//采集用户信息
 		if p.UserId == "" && strings.Contains(PP.Rp.Pick, "user") {
 			PP.setMessageUser(p, Message)
@@ -286,6 +292,16 @@ func (PP *Processor) setMessageOrder(p *object.PhpMsg, Message object.Content) {
 			MsgLock.Lock()
 			p.PayId, p.PayType, p.PayStatus, p.ChannelId, p.Money, p.GoodId = res[3], res[1], "callback_"+res[2], res[4], helper.RoundString(res[5], 2), res[6]
 			MsgLock.Unlock()
+		}
+	}
+}
+
+//设置订单参数
+func (PP *Processor) setMessageParams(p *object.PhpMsg, Message object.Content) {
+	if strings.Contains(Message.Content, "[ PARAM ] ") {
+		list := strings.Split(Message.Content, `[ PARAM ] `)
+		if len(list) == 2 && strings.HasPrefix(list[1], "{") {
+			p.Params, _ = simplejson.NewJson([]byte(list[1]))
 		}
 	}
 }

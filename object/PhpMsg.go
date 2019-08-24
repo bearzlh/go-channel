@@ -1,5 +1,7 @@
 package object
 
+import "github.com/bitly/go-simplejson"
+
 type PhpMsg struct {
 	AppId       string `json:"appid"`
 	WechatAppId string `json:"wechatappid"`
@@ -49,6 +51,8 @@ type PhpMsg struct {
 
 	//日志内容
 	Message []Content `json:"message"`
+
+	Params *simplejson.Json `json:"params"`
 
 	WechatMsg *WechatMsg `json:"wechat_msg"`
 }

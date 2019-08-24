@@ -7,15 +7,7 @@
       "type": "php",//es索引参数
       "on": true,//开启日志读取
       "continue": true,//从上次读取结束时继续读取
-      "pick": "cookie,get,order,user,wechat" //采集cookie与get参数
-    },
-    {
-      "dir": "{nginx_log_dir}",
-      "time_format": "",
-      "suffix": "access.log",
-      "type": "nginx",
-      "on": false,
-      "continue": true
+      "pick": "cookie,get,order,user,wechat,params" //采集cookie与get参数
     }
   ],
   "log": {
@@ -56,7 +48,7 @@
     "Storage": "storage", //es暂存目录
     "recover_thread": 2 //es恢复暂存数据线程数
   },
-  "version": "0.25",//脚本版本
+  "version": "0.26",//脚本版本
   "env": "log", //用作es索引前缀，如果非空将使用-与时间分隔
   "appid": "", //appid字段，区分平台，默认使用主机名字符串
   "recover": {
