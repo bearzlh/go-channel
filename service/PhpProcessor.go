@@ -24,6 +24,8 @@ type Processor struct {
 
 var phpPostLineLock = new(sync.Mutex)
 
+var runTimeLock = new(sync.Mutex)
+
 var UserTable = "sign recharge consume user_recently_read recharge user"
 
 var MsgLock = new(sync.Mutex)
@@ -125,11 +127,11 @@ func (PP *Processor) GetPhpMsg(lines []string, pm *object.PhpMsg) {
 }
 
 func (PP *Processor) getMessageFirstLine(p *object.PhpMsg, line string) {
+	p.RunTime = map[string]float64{}
+	p.RequestTag = map[string]string{}
 	s := helper.RegexpMatch(line, PhpFirstLineRegex)
 	if len(s) > 0 {
 		Date := helper.FormatTimeStamp(s[3], "")
-		p.RunTime = map[string]float64{}
-		p.RequestTag = map[string]string{}
 		if Cf.Recover.From != "" && Date < helper.FormatTimeStamp(Cf.Recover.From, "") {
 			return
 		}
@@ -276,11 +278,10 @@ func (PP *Processor) setMessageRuntime(p *object.PhpMsg, Message object.Content)
 	regexp := `^\[ (\w+) \] .*? \[ RunTime:(\d+\.\d+)s \]`
 	res := helper.RegexpMatch(Message.Content, regexp)
 	if len(res) > 0 {
-		if p.RunTime == nil {
-			p.RunTime = map[string]float64{}
-		}
 		key := string(res[1])
 		value, _ := strconv.ParseFloat(res[2], 64)
+		value = helper.RoundFloat(value * 1000, 2)
+		runTimeLock.Lock()
 		if exists, ok := p.RunTime[key]; ok {
 			if exists < value {
 				p.RunTime[key] = value
@@ -288,6 +289,22 @@ func (PP *Processor) setMessageRuntime(p *object.PhpMsg, Message object.Content)
 		} else {
 			p.RunTime[key] = value
 		}
+		runTimeLock.Unlock()
+	}
+
+	regexTotal := `^\[运行时间：(\d+.\d+)s\]\[吞吐率：(\d+.\d+)req/s\] \[内存消耗：((\d+,)?\d+.\d+)kb\] \[文件加载：(\d+)\]`
+	resTotal := helper.RegexpMatch(Message.Content, regexTotal)
+	if len(resTotal) > 0 {
+		total, _ := strconv.ParseFloat(resTotal[1], 64)
+		rpm, _ := strconv.ParseFloat(resTotal[2], 64)
+		memory, _ := strconv.ParseFloat(strings.Replace(string(resTotal[3]), ",", "", 3), 32)
+		runTimeLock.Lock()
+		p.RunTime["total"] = helper.RoundFloat(total * 1000, 2)
+		p.RunTime["rpm"] = helper.RoundFloat(rpm, 2)
+		p.RunTime["memory"] = helper.RoundFloat(memory, 2)
+		include, _ := strconv.ParseFloat(resTotal[len(resTotal) - 1], 64)
+		p.RunTime["include"] = helper.RoundFloat(include, 2)
+		runTimeLock.Unlock()
 	}
 }
 
@@ -334,7 +351,6 @@ func getQuery(v interface{}) string {
 	} else if r.String() == "string" {
 		return v.(string)
 	}
-	L.Debug("error type:"+r.String(), LEVEL_ERROR)
 	return ""
 }
 
@@ -348,7 +364,9 @@ func (PP *Processor) setMessageParams(p *object.PhpMsg, Message object.Content) 
 			for k, v := range m {
 				value := getQuery(v)
 				if k == "code" && p.Uri == "/clientappapi" {
+					runTimeLock.Lock()
 					p.RequestTag["app_api_code"] = value
+					runTimeLock.Unlock()
 				}
 				p.Request = append(p.Request, object.Query{Key: k, Value: value})
 			}
@@ -365,6 +383,17 @@ func (PP *Processor) setMessageHeader(p *object.PhpMsg, Message object.Content) 
 			m, _ := param.Map()
 			for k, v := range m {
 				p.Header = append(p.Header, object.Query{Key: k, Value:getQuery(v)})
+				if k == "common" {
+					value,_:= simplejson.NewJson([]byte(getQuery(v)))
+					uid, _ := value.Get("uid").String()
+					if uid != "" {
+						p.UserId = uid
+					}
+					token, _ := value.Get("token").String()
+					if token != "" {
+						p.OpenId = token
+					}
+				}
 			}
 		}
 	}

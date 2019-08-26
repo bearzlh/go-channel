@@ -2,6 +2,7 @@ package test
 
 import (
 	"encoding/json"
+	"github.com/bitly/go-simplejson"
 	"regexp"
 	"strconv"
 	"strings"
@@ -163,4 +164,25 @@ func TestWechatMsg(t *testing.T) {
 		}
 		t.Log(WechatMsg)
 	}
+}
+
+func TestRunTime(t *testing.T) {
+	msg := "[运行时间：0.071368s][吞吐率：14.01req/s] [内存消耗：8,440.49kb] [文件加载：105]"
+	regex := `^\[运行时间：(\d+.\d+)s\]\[吞吐率：(\d+.\d+)req/s\] \[内存消耗：((\d+,)?\d+.\d+)kb\] \[文件加载：(\d+)\]`
+	res := helper.RegexpMatch(msg, regex)
+	if len(res) > 0 {
+		t.Log(len(res))
+		for k,v:=range res {
+			t.Log(k,v)
+		}
+	} else {
+		t.Log(0)
+	}
+}
+
+func TestHeader(t *testing.T) {
+	msg := `{}`
+	value, _ := simplejson.NewJson([]byte(msg))
+	uid, _ := value.Get("uid").String()
+	t.Log(uid)
 }
