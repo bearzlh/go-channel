@@ -1,7 +1,9 @@
 package test
 
 import (
+	"encoding/json"
 	"github.com/bitly/go-simplejson"
+	"reflect"
 	"strings"
 	"testing"
 	"workerChannel/object"
@@ -29,7 +31,15 @@ func TestParams(t *testing.T) {
 		m, _ := param.Map()
 		for k,v:= range m{
 			a.Key = k
-			a.Value = v.(string)
+			r := reflect.TypeOf(v)
+			t.Log(r)
+			if r.String() == "json.Number" {
+				a.Value = v.(json.Number).String()
+			}
+
+			if r.String() == "string" {
+				a.Value = v.(string)
+			}
 		}
 		t.Log(a)
 	}

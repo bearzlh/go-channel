@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -309,7 +310,14 @@ func (PP *Processor) setMessageParams(p *object.PhpMsg, Message object.Content) 
 			param, _ := simplejson.NewJson([]byte(list[1]))
 			m, _ := param.Map()
 			for k, v := range m {
-				p.Request = append(p.Request, object.Query{Key: k, Value: v.(string)})
+				r := reflect.TypeOf(v)
+				o := object.Query{Key: k}
+				if r.String() == "json.Number" {
+					o.Value = v.(json.Number).String()
+				} else if r.String() == "string" {
+					o.Value = v.(string)
+				}
+				p.Request = append(p.Request, o)
 			}
 		}
 	}
