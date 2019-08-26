@@ -3,6 +3,7 @@ package test
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -128,14 +129,24 @@ func TestUri(t *testing.T) {
 }
 
 func TestFirstLine(t *testing.T) {
-	//res := helper.RegexpMatch(`[1] 3f7a72d13b859 [2019-05-08 13:37:02] 103.121.164.210 GET http://px-b15bc-wx7610e3344bdea6f6-20000093-8070e.dev.kpread.com:80/t/888?ext={%22mark%22:3202,%22push_time%22:1557115701,%22push_id%22:%2293%22,%22push_idx%22:1}`, service.PhpFirstLineRegex)
-	//if len(res) > 0 {
-	//	Url := strings.TrimSpace(string(res[6]))
-	//	u, _ := service.ParseUrl(Url)
-	//	t.Log(u.Query())
-	//} else {
-	//	t.Log(0)
-	//}
+	line := "[ SQL ] SELECT * FROM `client_config` WHERE  `fun_type` = '1'  AND `status` = '1'  AND `start_time` < '2019-08-26 13:45:54'  AND `end_time` > '2019-08-26 13:45:54'  AND `user_pay_type` IN ('0')  AND `version` IN ('1','-1') ORDER BY `sort`  desc LIMIT 5 [ RunTime:0.001141s ]"
+	res := helper.RegexpMatch(line, `^\[ (\w+) \] .*? \[ RunTime:(\d+\.\d+)s \]`)
+	m := map[string]float64{"SQL":0.0001}
+	if len(res) > 0 {
+		key := string(res[1])
+		value, _:=strconv.ParseFloat(res[2], 64)
+		if exists, ok := m[key]; ok {
+			if exists < value {
+				m[key] = value
+			}
+		} else {
+			m[key] = value
+		}
+		t.Log(m)
+
+	} else {
+		t.Log(0)
+	}
 }
 
 func TestWechatMsg(t *testing.T) {

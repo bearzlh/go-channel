@@ -230,6 +230,11 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 			PP.setMessageHeader(p, Message)
 		}
 
+		//添加header参数
+		if strings.Contains(PP.Rp.Pick, "runtime") {
+			PP.setMessageRuntime(p, Message)
+		}
+
 		//采集用户信息
 		if p.UserId == "" && strings.Contains(PP.Rp.Pick, "user") {
 			PP.setMessageUser(p, Message)
@@ -247,7 +252,7 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 	}
 }
 
-//设置wechat参数
+//采集wechat参数
 func (PP *Processor) setMessageWechat(p *object.PhpMsg, Message object.Content) {
 	keywords := `[ WeChat ] [ MP ] [ API ] Message: `
 	if strings.Contains(p.Uri, "/api/wechat/mpapi/appid/") && strings.Contains(Message.Content, keywords) {
@@ -265,7 +270,27 @@ func (PP *Processor) setMessageWechat(p *object.PhpMsg, Message object.Content) 
 	}
 }
 
-//设置用户参数
+//采集耗时参数
+func (PP *Processor) setMessageRuntime(p *object.PhpMsg, Message object.Content) {
+	regexp := `^\[ (\w+) \] .*? \[ RunTime:(\d+\.\d+)s \]`
+	res := helper.RegexpMatch(Message.Content, regexp)
+	if len(res) > 0 {
+		if p.RunTime == nil {
+			p.RunTime = map[string]float64{}
+		}
+		key := string(res[1])
+		value, _ := strconv.ParseFloat(res[2], 64)
+		if exists, ok := p.RunTime[key]; ok {
+			if exists < value {
+				p.RunTime[key] = value
+			}
+		} else {
+			p.RunTime[key] = value
+		}
+	}
+}
+
+//采集用户参数
 func (PP *Processor) setMessageUser(p *object.PhpMsg, Message object.Content) {
 	keywords := "get_db_connect"
 	if len(Message.Content) >= len(keywords) && Message.Content[0:len(keywords)] == keywords {
@@ -281,8 +306,7 @@ func (PP *Processor) setMessageUser(p *object.PhpMsg, Message object.Content) {
 	}
 }
 
-
-//设置订单参数
+//采集订单参数
 func (PP *Processor) setMessageOrder(p *object.PhpMsg, Message object.Content) {
 	var res []string
 	if strings.Contains(p.Uri, "/api/recharge/pay") || strings.Contains(p.Uri, "/api/activity/pay") {
@@ -302,7 +326,18 @@ func (PP *Processor) setMessageOrder(p *object.PhpMsg, Message object.Content) {
 	}
 }
 
-//设置订单参数
+func getQuery(v interface{}) string {
+	r := reflect.TypeOf(v)
+	if r.String() == "json.Number" {
+		return v.(json.Number).String()
+	} else if r.String() == "string" {
+		return v.(string)
+	}
+	L.Debug("error type:"+r.String(), LEVEL_ERROR)
+	return ""
+}
+
+//采集请求参数
 func (PP *Processor) setMessageParams(p *object.PhpMsg, Message object.Content) {
 	if strings.Contains(Message.Content, "[ PARAM ] ") {
 		list := strings.Split(Message.Content, `[ PARAM ] `)
@@ -310,20 +345,13 @@ func (PP *Processor) setMessageParams(p *object.PhpMsg, Message object.Content) 
 			param, _ := simplejson.NewJson([]byte(list[1]))
 			m, _ := param.Map()
 			for k, v := range m {
-				r := reflect.TypeOf(v)
-				o := object.Query{Key: k}
-				if r.String() == "json.Number" {
-					o.Value = v.(json.Number).String()
-				} else if r.String() == "string" {
-					o.Value = v.(string)
-				}
-				p.Request = append(p.Request, o)
+				p.Request = append(p.Request, object.Query{Key: k, Value:getQuery(v)})
 			}
 		}
 	}
 }
 
-//设置订单参数
+//采集header参数
 func (PP *Processor) setMessageHeader(p *object.PhpMsg, Message object.Content) {
 	if strings.Contains(Message.Content, "[ HEADER ] ") {
 		list := strings.Split(Message.Content, `[ HEADER ] `)
@@ -331,13 +359,13 @@ func (PP *Processor) setMessageHeader(p *object.PhpMsg, Message object.Content) 
 			param, _ := simplejson.NewJson([]byte(list[1]))
 			m, _ := param.Map()
 			for k, v := range m {
-				p.Header = append(p.Header, object.Query{Key: k, Value: v.(string)})
+				p.Header = append(p.Header, object.Query{Key: k, Value:getQuery(v)})
 			}
 		}
 	}
 }
 
-//设置cookie参数
+//采集cookie参数
 func (PP *Processor) setMessageCookie(p *object.PhpMsg, Message object.Content) {
 	if len(Message.Content) >= 3 && Message.Content[0:3] == "OS:" {
 		if (len(p.Uri) >= 6 && p.Uri[0:6] == "/index") || p.Uri == "/" {
@@ -374,7 +402,7 @@ func (PP *Processor) setMessageCookie(p *object.PhpMsg, Message object.Content) 
 	}
 }
 
-//获取GET参数
+//采集GET参数
 func (PP *Processor) setQuery(values url.Values, msg *object.PhpMsg) {
 	for field, list := range values {
 		msg.Query = append(msg.Query, object.Query{Key: field, Value: list[0]})
