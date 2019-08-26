@@ -47,6 +47,8 @@ type PhpMsg struct {
 
 	Jingwei string `json:"jingwei"`
 
+	RequestTag map[string]string `json:"request_tag"`
+
 	RunTime map[string]float64 `json:"runtime"`
 
 	//日志内容

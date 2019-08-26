@@ -128,7 +128,8 @@ func (PP *Processor) getMessageFirstLine(p *object.PhpMsg, line string) {
 	s := helper.RegexpMatch(line, PhpFirstLineRegex)
 	if len(s) > 0 {
 		Date := helper.FormatTimeStamp(s[3], "")
-
+		p.RunTime = map[string]float64{}
+		p.RequestTag = map[string]string{}
 		if Cf.Recover.From != "" && Date < helper.FormatTimeStamp(Cf.Recover.From, "") {
 			return
 		}
@@ -345,7 +346,11 @@ func (PP *Processor) setMessageParams(p *object.PhpMsg, Message object.Content) 
 			param, _ := simplejson.NewJson([]byte(list[1]))
 			m, _ := param.Map()
 			for k, v := range m {
-				p.Request = append(p.Request, object.Query{Key: k, Value:getQuery(v)})
+				value := getQuery(v)
+				if k == "code" && p.Uri == "/clientappapi" {
+					p.RequestTag["app_api_code"] = value
+				}
+				p.Request = append(p.Request, object.Query{Key: k, Value: value})
 			}
 		}
 	}
