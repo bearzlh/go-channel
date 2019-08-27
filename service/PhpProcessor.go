@@ -213,11 +213,6 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 		Message.Content = strings.TrimSpace(MatchMessage[4])
 		p.Message[index] = Message
 
-		//添加cookie参数
-		if strings.Contains(PP.Rp.Pick, "cookie") {
-			PP.setMessageCookie(p, Message)
-		}
-
 		//添加订单参数
 		if strings.Contains(PP.Rp.Pick, "order") {
 			PP.setMessageOrder(p, Message)
@@ -233,7 +228,7 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 			PP.setMessageHeader(p, Message)
 		}
 
-		//添加header参数
+		//添加runtime参数
 		if strings.Contains(PP.Rp.Pick, "runtime") {
 			PP.setMessageRuntime(p, Message)
 		}
@@ -322,6 +317,36 @@ func (PP *Processor) setMessageUser(p *object.PhpMsg, Message object.Content) {
 			}
 		}
 	}
+
+	if len(Message.Content) >= 3 && Message.Content[0:3] == "OS:" {
+		res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
+		if len(res) > 0 {
+			MsgLock.Lock()
+			if p.Country == "" {
+				p.Country = res[2]
+			}
+			if p.Province == "" {
+				p.Province = res[3]
+			}
+			if p.City == "" {
+				p.City = res[4]
+			}
+			if res[6] != "" {
+				p.UserId = res[6]
+			}
+			if res[7] != "" {
+				p.OpenId = res[7]
+			}
+			p.ChannelId, p.AgentId, p.Operator, p.Access = res[8], res[9], res[5], res[1]
+			MsgLock.Unlock()
+		}
+		res = helper.RegexpMatch(Message.Content, PhpAdminCookie)
+		if len(res) > 0 {
+			MsgLock.Lock()
+			p.Country, p.Province, p.City, p.Operator, p.AdminId, p.Group = res[1], res[2], res[3], res[4], res[5], res[6]
+			MsgLock.Unlock()
+		}
+	}
 }
 
 //采集订单参数
@@ -382,7 +407,8 @@ func (PP *Processor) setMessageHeader(p *object.PhpMsg, Message object.Content) 
 			param, _ := simplejson.NewJson([]byte(list[1]))
 			m, _ := param.Map()
 			for k, v := range m {
-				p.Header = append(p.Header, object.Query{Key: k, Value:getQuery(v)})
+				value := getQuery(v)
+				p.Header = append(p.Header, object.Query{Key: k, Value: value})
 				if k == "common" {
 					value,_:= simplejson.NewJson([]byte(getQuery(v)))
 					uid, _ := value.Get("uid").String()
@@ -394,43 +420,24 @@ func (PP *Processor) setMessageHeader(p *object.PhpMsg, Message object.Content) 
 						p.OpenId = token
 					}
 				}
-			}
-		}
-	}
-}
 
-//采集cookie参数
-func (PP *Processor) setMessageCookie(p *object.PhpMsg, Message object.Content) {
-	if len(Message.Content) >= 3 && Message.Content[0:3] == "OS:" {
-		if (len(p.Uri) >= 6 && p.Uri[0:6] == "/index") || p.Uri == "/" {
-			res := helper.RegexpMatch(Message.Content, PhpFrontCookie)
-			if len(res) > 0 {
-				MsgLock.Lock()
-				if p.Country == "" {
-					p.Country = res[2]
+				if k == "cookie" && strings.Contains(PP.Rp.Pick, "cookie") {
+					listCookie := strings.Split(value, "; ")
+					for _, value := range listCookie {
+						item := strings.Split(value, "=")
+						if len(item) > 1 {
+							p.Cookie = append(p.Cookie, object.Query{Key: item[0], Value: item[1]})
+						}
+					}
 				}
-				if p.Province == "" {
-					p.Province = res[3]
+
+				if k == "common" && strings.Contains(PP.Rp.Pick, "common") {
+					common, _ := simplejson.NewJson([]byte(value))
+					m, _ := common.Map()
+					for key, value := range m {
+						p.Common = append(p.Common, object.Query{Key: key, Value: getQuery(value)})
+					}
 				}
-				if p.City == "" {
-					p.City = res[4]
-				}
-				if res[6] != "" {
-					p.UserId = res[6]
-				}
-				if res[7] != "" {
-					p.OpenId = res[7]
-				}
-				p.ChannelId, p.AgentId, p.Operator, p.Access = res[8], res[9], res[5], res[1]
-				MsgLock.Unlock()
-			}
-		}
-		if len(p.Uri) >= 6 && p.Uri[0:6] == "/admin" {
-			res := helper.RegexpMatch(Message.Content, PhpAdminCookie)
-			if len(res) > 0 {
-				MsgLock.Lock()
-				p.Country, p.Province, p.City, p.Operator, p.AdminId, p.Group = res[1], res[2], res[3], res[4], res[5], res[6]
-				MsgLock.Unlock()
 			}
 		}
 	}

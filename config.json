@@ -8,7 +8,7 @@
       "on": true,
       "continue": true,
       "appid": "localhost",
-      "pick": "cookie,get,order,user,wechat,params,runtime"
+      "pick": "cookie,get,order,user,wechat,params,runtime,common"
     }
   ],
   "env": "log",

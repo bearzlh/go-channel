@@ -58,6 +58,10 @@ type PhpMsg struct {
 
 	Header []Query `json:"header"`
 
+	Cookie []Query `json:"cookie"`
+
+	Common []Query `json:"common"`
+
 	WechatMsg *WechatMsg `json:"wechat_msg"`
 }
 
