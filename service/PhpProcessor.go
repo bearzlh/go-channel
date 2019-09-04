@@ -206,11 +206,16 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 		Message.LogLine = MatchMessage[1]
 		Message.Xid = MatchMessage[2]
 		Message.LogType = MatchMessage[3]
+		Message.Content = strings.TrimSpace(MatchMessage[4])
 		if MatchMessage[3] == "error" {
 			p.Tag = "php." + p.AppId + ".error"
 			p.LogType = "error"
+			if p.ErrorMsg == "" {
+				p.ErrorMsg = Message.Content
+			} else {
+				p.ErrorMsg = p.ErrorMsg + "\n" + Message.Content
+			}
 		}
-		Message.Content = strings.TrimSpace(MatchMessage[4])
 		p.Message[index] = Message
 
 		//添加订单参数

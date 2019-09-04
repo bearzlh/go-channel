@@ -54,6 +54,8 @@ type PhpMsg struct {
 	//日志内容
 	Message []Content `json:"message"`
 
+	ErrorMsg string `json:"error_msg"`
+
 	Request []Query `json:"request"`
 
 	Header []Query `json:"header"`
