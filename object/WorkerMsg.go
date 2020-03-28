@@ -89,12 +89,12 @@ func (p WorkerMsg) GetLogType() string {
 
 //获取当前索引对象
 func (p WorkerMsg) GetIndexObj(env string, format string, time int64) Index {
-	return Index{IndexName: IndexContent{GetIndex(env, format, time, "worker"), "go"}}
+	return Index{IndexName: IndexContent{GetIndex(env, format, time, "worker"), "_doc"}}
 }
 
 //获取索引
 func (p WorkerMsg) GetIndex(env string, format string, time int64) string {
-	return GetIndex(env, format, time, "worker") + "/go"
+	return GetIndex(env, format, time, "worker") + "/_doc"
 }
 
 func (p WorkerMsg)GetJobId() string {

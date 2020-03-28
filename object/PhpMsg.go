@@ -97,13 +97,13 @@ func (p PhpMsg) GetLogType() string {
 
 //获取当前索引对象
 func (p PhpMsg) GetIndexObj(env string, format string, time int64) Index {
-	return Index{IndexName: IndexContent{GetIndex(env, format, time, "php"), "go"}}
+	return Index{IndexName: IndexContent{GetIndex(env, format, time, "php"), "_doc"}}
 }
 
 //获取索引
 func (p PhpMsg) GetIndex(env string, format string, time int64) string {
 	index := GetIndex(env, format, time, "php")
-	return index + "/go"
+	return index + "/_doc"
 }
 
 func (p PhpMsg)GetJobId() string {
