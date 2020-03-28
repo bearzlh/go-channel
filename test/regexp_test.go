@@ -19,7 +19,7 @@ func TestRegexp(t *testing.T) {
 	s := reg.Find(bid)
 	if string(s) == "" {
 		t.Log(1)
-	}else{
+	} else {
 		t.Log(0)
 	}
 }
@@ -30,7 +30,7 @@ func TestLevel(t *testing.T) {
 }
 
 func TestAppId(t *testing.T) {
-	for  {
+	for {
 		service.L.Debug(time.Now().String(), "debug")
 	}
 }
@@ -43,7 +43,7 @@ func TestPhp(t *testing.T) {
 	}
 }
 
-func TestCookie(t *testing.T)  {
+func TestCookie(t *testing.T) {
 	msg := `OS:Android UA:Mozilla/5.0 (Linux; Android 6.0.1; OPPO R9s Build/MMB29M; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/66.0.3359.126 MQQBrowser/6.2 TBS/044506 Mobile Safari/537.36 MMWEBID/1091 MicroMessenger/7.0.3.1400(0x2700033B) Process/tools NetType/WIFI Language/zh_CN NetType:4G IP:117.179.11.226 [中国|0|黑龙江省|哈尔滨市|移动] user_id:1 openid:oPUdp1H58SW4taFN3fzR8mu4A-d8 channel_id:deleted agent_id:deleted referral_id:deleted REMOTE_ADDR:10.250.2.8 HTTP_X_FORWARDED_FOR:117.179.11.226`
 	regex := service.PhpFrontCookie
 	res := helper.RegexpMatch(msg, regex)
@@ -56,10 +56,10 @@ func TestCookie(t *testing.T)  {
 	}
 }
 
-func TestCookie1(t *testing.T)  {
-	msg := `OS:Other UA:Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.25 Safari/537.36 Core/1.70.3638.400 QQBrowser/10.4.3264.400 NetType:Other IP:223.74.237.155 [中国|0|广东省|揭阳市|移动] admin_id:deleted group: REMOTE_ADDR:10.250.2.7 HTTP_X_FORWARDED_FOR:223.74.237.155`
+func TestCookie1(t *testing.T) {
+	msg := `OS:Other UA:Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36 NetType:Other IP:220.201.216.47 [中国|0|黑龙江省|哈尔滨市|联通|854] admin_id:14749 group:3 REMOTE_ADDR:10.250.3.48 HTTP_X_FORWARDED_FOR:220.201.216.47 [ FromPreLog:0.057767 ]`
 	//regex := `OS:.*?[(\w+)|\w+|(\w+)|(\w+)|(\w+)]user_id:(\d+)* .*? channel_id:(\d+)* agent_id:(\d+)* referral_id:(\d+)*`
-	regex := `.*?\[(.*?)\|0\|(.*?)\|(.*?)\|(.*?)\] admin_id:(\d+)* group:(\d+)* `
+	regex := service.PhpAdminCookie
 	res := helper.RegexpMatch(msg, regex)
 	if len(res) > 0 {
 		for _, item := range res {
@@ -132,10 +132,10 @@ func TestUri(t *testing.T) {
 func TestFirstLine(t *testing.T) {
 	line := "[ SQL ] SELECT * FROM `client_config` WHERE  `fun_type` = '1'  AND `status` = '1'  AND `start_time` < '2019-08-26 13:45:54'  AND `end_time` > '2019-08-26 13:45:54'  AND `user_pay_type` IN ('0')  AND `version` IN ('1','-1') ORDER BY `sort`  desc LIMIT 5 [ RunTime:0.001141s ]"
 	res := helper.RegexpMatch(line, `^\[ (\w+) \] .*? \[ RunTime:(\d+\.\d+)s \]`)
-	m := map[string]float64{"SQL":0.0001}
+	m := map[string]float64{"SQL": 0.0001}
 	if len(res) > 0 {
 		key := string(res[1])
-		value, _:=strconv.ParseFloat(res[2], 64)
+		value, _ := strconv.ParseFloat(res[2], 64)
 		if exists, ok := m[key]; ok {
 			if exists < value {
 				m[key] = value
@@ -172,8 +172,8 @@ func TestRunTime(t *testing.T) {
 	res := helper.RegexpMatch(msg, regex)
 	if len(res) > 0 {
 		t.Log(len(res))
-		for k,v:=range res {
-			t.Log(k,v)
+		for k, v := range res {
+			t.Log(k, v)
 		}
 	} else {
 		t.Log(0)

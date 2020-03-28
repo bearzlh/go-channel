@@ -21,7 +21,6 @@ import (
 )
 
 type EsService struct {
-
 }
 
 var Es *EsService
@@ -211,13 +210,13 @@ func (E *EsService) CheckStorage() {
 					if count%2 == 0 {
 						if len(dataPost) >= Cf.Msg.BatchSize*2 {
 							postData := strings.Join(dataPost, "")
-							ThreadLimit<-1
+							ThreadLimit <- 1
 							L.Debug(fmt.Sprintf("暂存发送, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
 							dataPost = make([]string, 0)
 							go func() {
 								sendingLock.Lock()
 								if len(sending) == 0 {
-									sending<-true
+									sending <- true
 								}
 								sendingLock.Unlock()
 								_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
@@ -238,12 +237,12 @@ func (E *EsService) CheckStorage() {
 						if errRead != nil || io.EOF == errRead {
 							if len(dataPost) > 0 {
 								postData := strings.Join(dataPost, "")
-								ThreadLimit<-1
+								ThreadLimit <- 1
 								L.Debug(fmt.Sprintf("暂存发送, %d, %d", len(ThreadLimit), len(dataPost)), LEVEL_INFO)
 								go func() {
 									sendingLock.Lock()
 									if len(sending) == 0 {
-										sending<-true
+										sending <- true
 									}
 									sendingLock.Unlock()
 									_, err := E.PostData("http://"+E.GetHost()+"/_bulk", postData)
@@ -343,7 +342,7 @@ func (E *EsService) ProcessBulk() (string, string) {
 		}
 		jobs[i] = doc.Content.GetJobId()
 	}
-	L.Debug(fmt.Sprintf("组装数据,%d", len(bulkContent) / 2), LEVEL_INFO)
+	L.Debug(fmt.Sprintf("组装数据,%d", len(bulkContent)/2), LEVEL_INFO)
 	return strings.Join(bulkContent, "\n") + "\n", strings.Join(jobs, ",")
 }
 
@@ -365,7 +364,7 @@ func (E *EsService) BuckPost(content string, jobs string) bool {
 		E.SaveToStorage(content)
 		return false
 	}
-	url := "http://"+E.GetHost()+"/_bulk"
+	url := "http://" + E.GetHost() + "/_bulk"
 	str, err := E.PostData(url, content)
 	if err != nil {
 		return false
@@ -422,7 +421,7 @@ func (E *EsService) Post() {
 //执行数据的发送
 func (E *EsService) PostData(url string, content string) (string, error) {
 	transport := http.Transport{
-		DialContext: dialTimeout,
+		DialContext:       dialTimeout,
 		DisableKeepAlives: true,
 	}
 	client := http.Client{
@@ -432,7 +431,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 	var err error
 	var byteC []byte
 	for i := 0; i < Cf.Es.Retry; i++ {
-		ConcurrentPost<-0
+		ConcurrentPost <- 0
 		res, err = client.Post(url, "application/json", strings.NewReader(string(content)))
 		<-ConcurrentPost
 		if err != nil {
@@ -487,7 +486,7 @@ func (E *EsService) PostData(url string, content string) (string, error) {
 //执行get请求
 func (E *EsService) GetData(url string) (string, error) {
 	transport := http.Transport{
-		DialContext: dialTimeout,
+		DialContext:       dialTimeout,
 		DisableKeepAlives: true,
 	}
 	client := http.Client{
@@ -503,7 +502,7 @@ func (E *EsService) GetData(url string) (string, error) {
 
 //api请求参数配置
 func dialTimeout(ctx context.Context, network, addr string) (net.Conn, error) {
-	conn, err := net.DialTimeout(network, addr, time.Second * 5)
+	conn, err := net.DialTimeout(network, addr, time.Second*5)
 	if err != nil {
 		return conn, err
 	}

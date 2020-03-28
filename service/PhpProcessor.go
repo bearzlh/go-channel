@@ -19,7 +19,7 @@ import (
 type Processor struct {
 	Rp                ReadPath
 	phpLineNumber     int64
-	phpPostLineNumber     int64
+	phpPostLineNumber int64
 }
 
 var phpPostLineLock = new(sync.Mutex)
@@ -115,7 +115,7 @@ func (PP *Processor) GetPhpMsg(lines []string, pm *object.PhpMsg) {
 		for index, data := range lines {
 			if index == 0 {
 				PP.getMessageFirstLine(pm, data)
-				msgCh<-0
+				msgCh <- 0
 			} else {
 				go func(msgCh, nextCh chan int, index int, data string) {
 					PP.getMessage(pm, data, index, msgCh, nextCh)
@@ -259,8 +259,9 @@ func (PP *Processor) getMessage(p *object.PhpMsg, line string, index int, msgCh,
 func (PP *Processor) setMessageWechat(p *object.PhpMsg, Message object.Content) {
 	keywords := `[ WeChat ] [ MP ] [ API ] Message: `
 	if strings.Contains(p.Uri, "/api/wechat/mpapi/appid/") && strings.Contains(Message.Content, keywords) {
-		list := strings.Split(Message.Content, keywords)
-		wechatString := strings.Replace(list[1], `\"`, `"`, 100)
+		listContent := strings.Split(Message.Content, keywords)
+		list := strings.Split(listContent[1], " [ FromPreLog:")
+		wechatString := strings.Replace(list[0], `\"`, `"`, 100)
 		WechatMsg := new(object.WechatMsg)
 		err := json.Unmarshal([]byte(wechatString), WechatMsg)
 		if err != nil {
@@ -280,7 +281,7 @@ func (PP *Processor) setMessageRuntime(p *object.PhpMsg, Message object.Content)
 	if len(res) > 0 {
 		key := string(res[1])
 		value, _ := strconv.ParseFloat(res[2], 64)
-		value = helper.RoundFloat(value * 1000, 2)
+		value = helper.RoundFloat(value*1000, 2)
 		runTimeLock.Lock()
 		if exists, ok := p.RunTime[key]; ok {
 			if exists < value {
@@ -299,10 +300,10 @@ func (PP *Processor) setMessageRuntime(p *object.PhpMsg, Message object.Content)
 		rpm, _ := strconv.ParseFloat(resTotal[2], 64)
 		memory, _ := strconv.ParseFloat(strings.Replace(string(resTotal[3]), ",", "", 3), 32)
 		runTimeLock.Lock()
-		p.RunTime["total"] = helper.RoundFloat(total * 1000, 2)
+		p.RunTime["total"] = helper.RoundFloat(total*1000, 2)
 		p.RunTime["rpm"] = helper.RoundFloat(rpm, 2)
 		p.RunTime["memory"] = helper.RoundFloat(memory, 2)
-		include, _ := strconv.ParseFloat(resTotal[len(resTotal) - 1], 64)
+		include, _ := strconv.ParseFloat(resTotal[len(resTotal)-1], 64)
 		p.RunTime["include"] = helper.RoundFloat(include, 2)
 		runTimeLock.Unlock()
 	}
@@ -415,7 +416,7 @@ func (PP *Processor) setMessageHeader(p *object.PhpMsg, Message object.Content) 
 				value := getQuery(v)
 				p.Header = append(p.Header, object.Query{Key: k, Value: value})
 				if k == "common" {
-					value,_:= simplejson.NewJson([]byte(getQuery(v)))
+					value, _ := simplejson.NewJson([]byte(getQuery(v)))
 					uid, _ := value.Get("uid").String()
 					if uid != "" {
 						p.UserId = uid
@@ -489,11 +490,11 @@ func GetAppIdFromHostName(HostName string) string {
 
 //获取日志读取位置文件
 func GetPositionFile(logType string) string {
-	return helper.GetPathJoin(Cf.AppPath, ".position_" + logType)
+	return helper.GetPathJoin(Cf.AppPath, ".position_"+logType)
 }
 
 //设置php读取行
-func (PP *Processor)SetPhpLineNumber(line int64) int64 {
+func (PP *Processor) SetPhpLineNumber(line int64) int64 {
 	PP.phpLineNumber = line
 	return PP.phpLineNumber
 }
@@ -505,7 +506,7 @@ func (PP *Processor) IncreaseLineNumber() int64 {
 }
 
 //设置php读取行
-func (PP *Processor)SetPhpPostLineNumber(line int64) int64 {
+func (PP *Processor) SetPhpPostLineNumber(line int64) int64 {
 	phpPostLineLock.Lock()
 	defer phpPostLineLock.Unlock()
 	if line > PP.phpPostLineNumber {
@@ -516,7 +517,7 @@ func (PP *Processor)SetPhpPostLineNumber(line int64) int64 {
 }
 
 //获取php读取行
-func (PP *Processor)GetPhpPostLineNumber() int64 {
+func (PP *Processor) GetPhpPostLineNumber() int64 {
 	return PP.phpPostLineNumber
 }
 
